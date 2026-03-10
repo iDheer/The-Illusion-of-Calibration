@@ -65,34 +65,111 @@ if [ -z "$HF_TOKEN" ]; then
         export HF_TOKEN=$(cat ~/.huggingface/token)
         print_progress "Loaded HF_TOKEN from ~/.huggingface/token"
     else
-        print_warning "HF_TOKEN not set. DINOv3 download may fail if model is gated."
-        print_warning "Set via: export HF_TOKEN=hf_..."
+        print_error "HF_TOKEN is not set — required to download DINOv3 (gated model)."
+        echo ""
+        echo "  Run this before starting the pipeline:"
+        echo "    export HF_TOKEN=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"
+        echo ""
+        exit 1
     fi
 fi
+export HUGGING_FACE_HUB_TOKEN="$HF_TOKEN"   # older transformers versions use this name
+export HUGGINGFACE_TOKEN="$HF_TOKEN"
+
+# ── Resolve python binary ───────────────────────────────────────────────────
+if command -v python3 &>/dev/null; then
+    PYTHON=python3
+elif command -v python &>/dev/null; then
+    PYTHON=python
+else
+    print_error "No python/python3 found. Install Python 3 first."
+    exit 1
+fi
+print_progress "Using: $(command -v $PYTHON) ($("$PYTHON" --version 2>&1))"
 
 # ── Prerequisite checks ─────────────────────────────────────────────────────
 print_phase "PREREQUISITES"
 
-if ! python -c "import torch; print(f'PyTorch {torch.__version__}, CUDA: {torch.cuda.is_available()}')" 2>/dev/null; then
-    print_error "PyTorch not found. Install with: pip install torch torchvision"
-    exit 1
+# Detect GPU compute capability from nvidia-smi (before importing torch)
+GPU_SM=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null \
+         | head -1 | tr -d '.' | xargs || echo "")
+print_progress "GPU compute capability: sm_${GPU_SM:-unknown}"
+
+# Decide which PyTorch build is needed
+#   sm_120 / sm_121 = Blackwell (RTX 5090) — needs nightly cu128
+#   everything else — stable cu121/cu118/cu117
+if [[ "$GPU_SM" == "120" || "$GPU_SM" == "121" ]]; then
+    TORCH_INDEX="https://download.pytorch.org/whl/nightly/cu128"
+    TORCH_EXTRA="--pre"
+    print_warning "Blackwell GPU (sm_${GPU_SM}) detected — nightly cu128 build required"
+else
+    CUDA_VER=$(nvcc --version 2>/dev/null | grep -oP 'release \K[0-9]+\.[0-9]+' | head -1 || \
+               nvidia-smi 2>/dev/null | grep -oP 'CUDA Version: \K[0-9]+\.[0-9]+' | head -1 || \
+               echo "12")
+    if [[ "$CUDA_VER" == 11.8* ]]; then
+        TORCH_INDEX="https://download.pytorch.org/whl/cu118"
+    elif [[ "$CUDA_VER" == 11.* ]]; then
+        TORCH_INDEX="https://download.pytorch.org/whl/cu117"
+    else
+        TORCH_INDEX="https://download.pytorch.org/whl/cu121"
+    fi
+    TORCH_EXTRA=""
 fi
 
-GPU_COUNT=$(python -c "import torch; print(torch.cuda.device_count())" 2>/dev/null || echo "0")
+# Install or force-reinstall PyTorch with the correct build
+NEEDS_INSTALL=false
+if ! "$PYTHON" -c "import torch" 2>/dev/null; then
+    NEEDS_INSTALL=true
+    print_warning "PyTorch not found — installing..."
+else
+    # Already installed — verify it actually works on this GPU
+    TORCH_OK=$("$PYTHON" -c "
+import torch, warnings
+warnings.filterwarnings('ignore')
+try:
+    t = torch.zeros(1).cuda()
+    print('ok')
+except Exception as e:
+    print('fail')
+" 2>/dev/null || echo "fail")
+    if [[ "$TORCH_OK" != "ok" ]]; then
+        print_warning "Installed PyTorch cannot use this GPU — reinstalling correct build..."
+        NEEDS_INSTALL=true
+    fi
+fi
+
+if $NEEDS_INSTALL; then
+    print_warning "Installing: pip install $TORCH_EXTRA torch torchvision --index-url $TORCH_INDEX"
+    pip install $TORCH_EXTRA torch torchvision --index-url "$TORCH_INDEX" --force-reinstall
+fi
+
+"$PYTHON" -c "
+import torch
+print('PyTorch ' + torch.__version__ + ', CUDA available: ' + str(torch.cuda.is_available()))
+if torch.cuda.is_available():
+    t = torch.zeros(1).cuda()
+    print('GPU tensor test: OK (' + torch.cuda.get_device_name(0) + ')')
+else:
+    print('WARNING: CUDA not available — training will run on CPU')
+"
+
+GPU_COUNT=$("$PYTHON" -c "import torch; print(torch.cuda.device_count())" 2>/dev/null || echo "0")
 if [ "$GPU_COUNT" -gt "0" ]; then
-    GPU_NAME=$(python -c "import torch; print(torch.cuda.get_device_name(0))" 2>/dev/null || echo "Unknown")
+    GPU_NAME=$("$PYTHON" -c "import torch; print(torch.cuda.get_device_name(0))" 2>/dev/null || echo "Unknown")
     print_progress "GPU detected: $GPU_NAME ($GPU_COUNT device(s))"
 else
     print_warning "No GPU detected. Training will be very slow on CPU."
 fi
 
-PYTHON_PACKAGES=("transformers" "timm" "sklearn" "cv2" "seaborn" "tqdm")
+PYTHON_PACKAGES=("transformers" "timm" "sklearn" "cv2" "seaborn" "tqdm" "pandas" "PIL")
+declare -A PIP_NAME=(["sklearn"]="scikit-learn" ["cv2"]="opencv-python" ["PIL"]="pillow")
 for pkg in "${PYTHON_PACKAGES[@]}"; do
-    if python -c "import $pkg" 2>/dev/null; then
+    if "$PYTHON" -c "import $pkg" 2>/dev/null; then
         print_progress "Package: $pkg"
     else
-        print_warning "Missing package: $pkg — installing..."
-        pip install $pkg -q
+        pip_pkg="${PIP_NAME[$pkg]:-$pkg}"
+        print_warning "Missing package: $pkg — installing $pip_pkg..."
+        pip install "$pip_pkg" -q
     fi
 done
 
@@ -122,7 +199,7 @@ print_progress "Result directories created under $RESULTS_DIR/"
 print_phase "DATA PREPARATION (WITH CLASS BALANCE REPORTING)"
 
 PREP_START=$(date +%s)
-python prepare_data.py
+"$PYTHON" prepare_data.py
 print_progress "Data prepared in $(elapsed_time $PREP_START)"
 
 # verify key CSVs
@@ -131,7 +208,7 @@ for csv in "airogs_train.csv" "chaksu_train_labeled.csv" "chaksu_test_labeled.cs
         ROWS=$(wc -l < "$CSV_DIR/$csv")
         print_progress "$csv — $ROWS rows"
     else
-        print_error "$csv not found after prepare_data.py"
+        print_error "$csv not found after prepare_data.py — check output above"
         exit 1
     fi
 done
@@ -140,7 +217,7 @@ done
 print_phase "PHASE A: SOURCE TRAINING — AIROGS (BALANCED + GRAYSCALE)"
 
 SRC_START=$(date +%s)
-python train_source.py
+"$PYTHON" train_source.py
 print_progress "Source training complete in $(elapsed_time $SRC_START)"
 
 if [ ! -f "$RESULTS_DIR/Source_AIROGS/model.pth" ]; then
@@ -152,14 +229,14 @@ fi
 print_phase "PHASE B: ORACLE TRAINING — CHÁKṢU (BALANCED + GRAYSCALE)"
 
 ORC_START=$(date +%s)
-python train_oracle.py || print_warning "Oracle training failed — continuing (it's a baseline)"
+"$PYTHON" train_oracle.py || print_warning "Oracle training failed — continuing (it's a baseline)"
 print_progress "Oracle training step done in $(elapsed_time $ORC_START)"
 
 # ── Phase C: MixEnt-Adapt ────────────────────────────────────────────────────
 print_phase "PHASE C: MIXENT-ADAPT — TEST-TIME ADAPTATION (GRAYSCALE-AWARE)"
 
 ADAPT_START=$(date +%s)
-python adapt_target.py
+"$PYTHON" adapt_target.py
 print_progress "Adaptation complete in $(elapsed_time $ADAPT_START)"
 
 if [ ! -f "$RESULTS_DIR/Netra_Adapt/adapted_model.pth" ]; then
@@ -171,7 +248,7 @@ fi
 print_phase "PHASE D: COMPREHENSIVE EVALUATION"
 
 EVAL_START=$(date +%s)
-python evaluate.py
+"$PYTHON" evaluate.py
 print_progress "Evaluation complete in $(elapsed_time $EVAL_START)"
 
 # ── Final Summary ─────────────────────────────────────────────────────────────

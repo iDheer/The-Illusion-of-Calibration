@@ -24,21 +24,36 @@ Recommended: **RTX 3090 / A5000 / A6000** with PyTorch image
 scp -r Run-3/ root@<vast-ip>:<port>:/workspace/Run-3/
 ```
 
-### 3. Upload data
-```bash
-# AIROGS: place in /workspace/data/raw_airogs/
-#   └── RG/*.jpg   (glaucoma)
-#   └── NRG/*.jpg  (normal)
+### 3. Upload / point to your downloaded data
 
-# Chákṣu: place in /workspace/data/raw_chaksu/
-#   └── Train/1.0_Original_Fundus_Images/[Bosch|Forus|Remidio]/
-#   └── Train/6.0_Glaucoma_Decision/.../*majority*.csv
-#   └── Test/  (same structure)
+You don't need to rename anything manually.  Run the setup script and it will
+find and reorganise your data automatically, regardless of how you downloaded it:
+
+```bash
+cd /workspace/Run-3
+bash setup_data.sh
 ```
+
+It searches common download locations for:
+
+| Dataset | What it looks for |
+|---------|-------------------|
+| **AIROGS** (Kaggle) | `glaucoma-dataset-eyepacs-airogs-light-v2.zip` or <br> any folder containing `RG/` and `NRG/` sub-folders |
+| **Chákṣu** (Figshare) | `Train.zip` + `Test.zip` at `/workspace/data/` or<br> already-extracted `Train/` and `Test/` folders anywhere under `/workspace/` |
+
+The script prints a summary at the end — check the image counts before continuing.
+
+> **Manual override**: if the auto-detection misses your folders, just run:
+> ```bash
+> mkdir -p /workspace/data/raw_airogs/RG /workspace/data/raw_airogs/NRG
+> cp -r /path/to/your/RG   /workspace/data/raw_airogs/RG
+> cp -r /path/to/your/NRG  /workspace/data/raw_airogs/NRG
+> cp -r /path/to/your/Train /workspace/data/raw_chaksu/
+> cp -r /path/to/your/Test  /workspace/data/raw_chaksu/
+> ```
 
 ### 4. Install dependencies
 ```bash
-cd /workspace/Run-3
 pip install -r requirements.txt
 ```
 

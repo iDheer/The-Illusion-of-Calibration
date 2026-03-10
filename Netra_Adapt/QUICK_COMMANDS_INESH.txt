@@ -77,4 +77,4 @@ python run_full_pipeline.py
 
 
 hugginface token needed- go to huggingface, invalide refresh and paste
-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
+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
