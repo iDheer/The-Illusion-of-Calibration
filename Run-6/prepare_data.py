@@ -44,9 +44,9 @@ KNOWN_CHAKSU = {
     'Bosch':   145,    # 1920×1440 px, handheld fundus camera
 }
 
-# Known native resolutions per device (W×H before any preprocessing)
+# Known native resolutions per device (W×H as reported by PIL, i.e. landscape W > H)
 KNOWN_RESOLUTIONS = {
-    'Remidio': (3264, 2448),   # W×H from paper (landscape)
+    'Remidio': (2448, 3264),   # portrait: W=2448, H=3264 (PIL reports width×height)
     'Forus':   (2048, 1536),
     'Bosch':   (1920, 1440),
 }
@@ -322,15 +322,23 @@ def parse_chaksu_labels():
                 label_map[fname_lower] = label
                 label_map[fname] = label
 
-                # Run-6 FIX: also register the base .jpg name for Forus-style
-                # keys like "image101.jpg-image101-1.jpg" → "image101.jpg".
-                # These arise when the CSV column stores the full path
-                # including an expert suffix after the extension.
-                for ext in ('.jpg', '.jpeg', '.png'):
-                    if ext + '-' in fname_lower:
-                        base = fname_lower.split(ext + '-')[0] + ext
-                        label_map[base] = label
-                        label_map[base.capitalize()] = label
+                # Run-6 FIX (extended): register base filenames for compound
+                # CSV keys like:
+                #   Forus:   "1.jpg-1-1.jpg"     → actual file "1.png"  (ext mismatch!)
+                #   Bosch:   "Image101.jpg-Image101-1.jpg" → actual "Image101.jpg" ✓
+                #   Remidio: "17521.tif-17521-1.tif"       → actual "17521.JPG"
+                # Key insight: the CSV separator can be .jpg-, .jpeg-, .png-, or .tif-.
+                # The actual file on disk may use a DIFFERENT extension.
+                # Solution: register the stem (no extension) with ALL likely extensions.
+                for sep_ext in ('.jpg', '.jpeg', '.png', '.tif'):
+                    if sep_ext + '-' in fname_lower:
+                        base_stem = fname_lower.split(sep_ext + '-')[0]
+                        # Register with every likely on-disk extension
+                        for reg_ext in ('.jpg', '.jpeg', '.png', '.tif'):
+                            label_map[base_stem + reg_ext] = label
+                            # also capitalised variant (e.g. .JPG)
+                            label_map[base_stem + reg_ext.upper()] = label
+                            label_map[(base_stem + reg_ext).capitalize()] = label
                         break
 
             print(f"  [OK]   {os.path.basename(csv_file):<53} {len(df):>5}  "
@@ -351,15 +359,19 @@ def parse_chaksu_labels():
         print(f"  Sample label_map keys (lowercase, first 10):")
         for k in lower_keys:
             print(f"    '{k}'  → label={label_map[k]}")
-        # Check for Forus-style compound keys BEFORE the Run-6 fix would have split them
-        compound_keys = [k for k in lower_keys if any(ext+'-' in k for ext in ('.jpg','.jpeg','.png'))]
+        # Check for compound keys (Forus .jpg-, Remidio .tif-)
+        compound_keys = [k for k in lower_keys
+                         if any(ext+'-' in k for ext in ('.jpg','.jpeg','.png','.tif'))]
         if compound_keys:
-            print(f"  ⚠ Forus-style compound keys still present in label_map (these are aliases;")
-            print(f"    the base filenames ALSO registered by Run-6 fix):")
+            print(f"  ⚠ Compound keys present in label_map (normal — base stems also registered):")
             for k in compound_keys[:5]:
-                print(f"    '{k}' → also registered as '{k.split('.jpg-')[0]+'.jpg'}'")
+                for sep in ('.jpg-', '.jpeg-', '.png-', '.tif-'):
+                    if sep in k:
+                        stem = k.split(sep)[0]
+                        print(f"    '{k}' → stem '{stem}' registered with .jpg/.png/.tif variants")
+                        break
         else:
-            print(f"  ✓ No compound Forus-style keys — all filenames look clean")
+            print(f"  ✓ No compound keys — all filenames look clean")
 
     # Step 3: Find all images and log per-device per-split counts
     # Run-6: track per-device counts and compare against KNOWN_CHAKSU sizes.
