@@ -1,11 +1,12 @@
 #!/bin/bash
 
 ###############################################################################
-#                       NETRA-ADAPT: RUN-3 PIPELINE                         #
+#                       NETRA-ADAPT: RUN-5 PIPELINE                         #
 #                                                                             #
-#  Key changes vs Run-1/2:                                                    #
-#  1. Class balance: WeightedRandomSampler + weighted CrossEntropyLoss        #
-#  2. Grayscale: GrayscaleToRGB strips colour before all training passes      #
+#  All 4 bugs fixed vs Runs 1-4:                                             #
+#  1. Colour inputs restored (GrayscaleToRGB removed)                        #
+#  2. Chaksu label matching fixed (fname.split('-') bug removed)             #
+#  3. Oracle uses AUROC early stopping + val split                           #
 #                                                                             #
 #  Usage: bash run_everything.sh                                             #
 ###############################################################################
@@ -23,7 +24,7 @@ BOLD='\033[1m'
 BASE_DIR="/workspace"
 DATA_DIR="$BASE_DIR/data"
 CSV_DIR="$DATA_DIR/processed_csvs"
-RESULTS_DIR="$BASE_DIR/results_run3"
+RESULTS_DIR="$BASE_DIR/results_run5"
 TOTAL_START=$(date +%s)
 
 print_header() {
@@ -49,14 +50,16 @@ elapsed_time() {
 
 ###############################################################################
 clear
-print_header "NETRA-ADAPT RUN-3: GRAYSCALE + BALANCED TRAINING"
+print_header "NETRA-ADAPT RUN-5: COLOUR + DIVERSITY LOSS + CORRECT CSV + PATCH ADAIN"
 echo -e "${BOLD}Date:${NC} $(date '+%Y-%m-%d %H:%M:%S')"
 echo -e "${BOLD}Workspace:${NC} $BASE_DIR"
 echo -e "${BOLD}Results dir:${NC} $RESULTS_DIR"
 echo ""
-echo -e "${YELLOW}Run-3 changes:${NC}"
-echo -e "  1. ${BOLD}Class balance${NC} — WeightedRandomSampler + weighted CrossEntropyLoss"
-echo -e "  2. ${BOLD}Grayscale${NC}     — GrayscaleToRGB strips colour bias at input"
+echo -e "${YELLOW}Run-5 fixes vs Runs 1-4:${NC}"
+echo -e "  1. ${BOLD}Diversity loss${NC}  — L_SFDA = L_ent - 1.0*L_div (was computed but never subtracted)"
+echo -e "  2. ${BOLD}Correct CSV${NC}     — Adapt on chaksu_train_unlabeled.csv, not test set"
+echo -e "  3. ${BOLD}Patch AdaIN${NC}     — Spatial [B,N,D] per-image stats (not CLS batch stats)"
+echo -e "  4. ${BOLD}Colour + labels${NC} — GrayscaleToRGB removed, fname fix, AUROC monitoring (Run-4)"
 echo ""
 
 # ── HuggingFace Token ───────────────────────────────────────────────────────
@@ -214,7 +217,7 @@ for csv in "airogs_train.csv" "chaksu_train_labeled.csv" "chaksu_test_labeled.cs
 done
 
 # ── Phase A: Source Training ─────────────────────────────────────────────────
-print_phase "PHASE A: SOURCE TRAINING — AIROGS (BALANCED + GRAYSCALE)"
+print_phase "PHASE A: SOURCE TRAINING — AIROGS (BALANCED + COLOUR)"
 
 SRC_START=$(date +%s)
 "$PYTHON" train_source.py
@@ -226,14 +229,14 @@ if [ ! -f "$RESULTS_DIR/Source_AIROGS/model.pth" ]; then
 fi
 
 # ── Phase B: Oracle Training ─────────────────────────────────────────────────
-print_phase "PHASE B: ORACLE TRAINING — CHÁKṢU (BALANCED + GRAYSCALE)"
+print_phase "PHASE B: ORACLE TRAINING — CHÁKṢU (BALANCED + COLOUR + AUROC MONITORING)"
 
 ORC_START=$(date +%s)
 "$PYTHON" train_oracle.py || print_warning "Oracle training failed — continuing (it's a baseline)"
 print_progress "Oracle training step done in $(elapsed_time $ORC_START)"
 
 # ── Phase C: MixEnt-Adapt ────────────────────────────────────────────────────
-print_phase "PHASE C: MIXENT-ADAPT — TEST-TIME ADAPTATION (GRAYSCALE-AWARE)"
+print_phase "PHASE C: MIXENT-ADAPT — TEST-TIME ADAPTATION (COLOUR)"
 
 ADAPT_START=$(date +%s)
 "$PYTHON" adapt_target.py
@@ -252,7 +255,7 @@ EVAL_START=$(date +%s)
 print_progress "Evaluation complete in $(elapsed_time $EVAL_START)"
 
 # ── Final Summary ─────────────────────────────────────────────────────────────
-print_header "NETRA-ADAPT RUN-3 — PIPELINE COMPLETE"
+print_header "NETRA-ADAPT RUN-5 — PIPELINE COMPLETE"
 echo -e "${BOLD}Total time:${NC} $(elapsed_time $TOTAL_START)"
 echo ""
 
@@ -263,4 +266,4 @@ if [ -f "$RESULTS_DIR/evaluation/results_table.csv" ]; then
     print_progress "Full results in $RESULTS_DIR/evaluation/"
 fi
 
-echo -e "\n${GREEN}${BOLD}Run-3 complete! ✓${NC}"
+echo -e "\n${GREEN}${BOLD}Run-5 complete! ✓${NC}"

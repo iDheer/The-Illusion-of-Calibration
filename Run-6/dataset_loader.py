@@ -1,19 +1,16 @@
 """
-dataset_loader.py - Run-3: Grayscale + Class Weight Utilities
+dataset_loader.py - Run-4: Class Weight Utilities (colour input restored)
 
-Run-3 Changes vs Run-1/2:
-1. GrayscaleToRGB transform: converts fundus images to luminance grayscale,
-   then replicates to 3 channels so DINOv3 (RGB model) still works unchanged.
-   Mean/std updated to grayscale ImageNet statistics.
-   --- WHY: glaucoma is a GEOMETRY task (cup-to-disc ratio), not a colour task.
-       Indian retinas are darker (higher melanin) which causes colour bias.
-       Removing colour forces the model to learn shape/structure features,
-       and collapses the main source of cross-ethnic domain shift.
-2. compute_class_weights(): computes per-class inverse-frequency weights
-   from a CSV file, used by train_source.py / train_oracle.py for
-   WeightedRandomSampler and weighted CrossEntropyLoss.
-   --- WHY: AIROGS and Chákṣu both have significant class imbalance.
-       The source model biased toward "Normal" → bad entropy split in MixEnt.
+Run-4 Changes vs Run-3:
+1. REMOVED GrayscaleToRGB — Run-3 showed this destroys diagnostic signal on
+   the small Chákṣu dataset (907 images).  Oracle AUROC was 0.497 (worse than
+   random) because cup pallor, RNFL defects and peripapillary atrophy are only
+   distinguishable via colour on small-N training sets.  Colour is restored.
+2. Full colour jitter restored (brightness, contrast, saturation, hue) with
+   slightly wider saturation/hue range to simulate cross-device colour variance.
+3. Normalisation reverted to standard RGB ImageNet stats (mean/std per channel).
+4. compute_class_weights() and compute_sample_weights() unchanged — still used
+   for WeightedRandomSampler + weighted CrossEntropyLoss (Run-3 fix kept).
 """
 
 import os
@@ -21,7 +18,7 @@ import cv2
 import torch
 import numpy as np
 import pandas as pd
-from PIL import Image, ImageOps
+from PIL import Image
 from torch.utils.data import Dataset
 from torchvision import transforms
 
@@ -29,14 +26,11 @@ from torchvision import transforms
 # Using 512x512 (512 = 16 * 32 patches)
 DINOV3_INPUT_SIZE = 512
 
-# ── Grayscale ImageNet statistics ──────────────────────────────────────────
-# Standard ImageNet per-channel mean/std: [0.485, 0.456, 0.406] / [0.229, 0.224, 0.225]
-# Luminance-weighted grayscale equivalent (Y = 0.299R + 0.587G + 0.114B):
-#   mean = 0.299*0.485 + 0.587*0.456 + 0.114*0.406 ≈ 0.449
-#   std  = sqrt(0.299²*0.229² + 0.587²*0.224² + 0.114²*0.225²) ≈ 0.226
-# We replicate to each channel since all 3 channels are identical after conversion.
-GRAY_MEAN = [0.449, 0.449, 0.449]
-GRAY_STD  = [0.226, 0.226, 0.226]
+# ── Standard RGB ImageNet statistics ─────────────────────────────────────
+# Run-4: restored from standard per-channel ImageNet values.
+# GrayscaleToRGB + GRAY_MEAN/GRAY_STD removed — colour inputs required.
+RGB_MEAN = [0.485, 0.456, 0.406]
+RGB_STD  = [0.229, 0.224, 0.225]
 
 
 # ── Preprocessing ──────────────────────────────────────────────────────────
@@ -98,30 +92,6 @@ def robust_circle_crop(image_path, target_size=DINOV3_INPUT_SIZE):
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     pil_img = Image.fromarray(img)
     return pil_img.resize((target_size, target_size), Image.Resampling.BICUBIC)
-
-
-class GrayscaleToRGB:
-    """
-    Run-3 core transform: RGB fundus → luminance grayscale → 3-channel grayscale.
-
-    Steps
-    -----
-    1. Convert PIL RGB image to luminance grayscale (single channel).
-    2. Replicate the single channel to produce a (3, H, W) tensor where all
-       three channels are identical.
-
-    This keeps the tensor shape compatible with DINOv3's RGB input while
-    stripping the colour information that causes cross-ethnic domain shift.
-    """
-    def __call__(self, img: Image.Image) -> Image.Image:
-        # Convert to grayscale (L mode = single channel)
-        gray = ImageOps.grayscale(img)          # PIL 'L' image
-        # Convert back to RGB so subsequent transforms (ToTensor etc.) work
-        # PIL 'L' → 'RGB' replicates the channel across R, G, B
-        return gray.convert('RGB')
-
-    def __repr__(self):
-        return "GrayscaleToRGB()"
 
 
 # ── Dataset ────────────────────────────────────────────────────────────────
@@ -198,24 +168,21 @@ def compute_sample_weights(csv_path: str) -> list:
 
 def get_transforms(is_training: bool = True) -> transforms.Compose:
     """
-    Run-3 transforms.
+    Run-4 transforms — colour input restored.
 
-    Key differences from Run-1/2
-    ----------------------------
-    • Grayscale conversion (GrayscaleToRGB) is the FIRST transform so that
-      all subsequent steps operate on a colour-agnostic image.
-    • Colour jitter (brightness, contrast, saturation, hue) is REMOVED — it
-      provides no useful augmentation on a grayscale image, and saturation/hue
-      are literally no-ops.  We compensate by reinforcing geometric augmentation.
-    • GaussianBlur probability raised to 0.4 to simulate quality variance
-      that is now the primary remaining domain-shift signal.
-    • Normalisation uses grayscale ImageNet stats (mean=0.449, std=0.226).
+    Key differences from Run-3
+    --------------------------
+    • GrayscaleToRGB REMOVED.  Run-3 showed that removing colour destroyed
+      diagnostic signal on the 907-image Oracle dataset (AUROC = 0.497).
+      Cup pallor, RNFL defects and peripapillary atrophy require colour.
+    • Full colour jitter restored: brightness, contrast, saturation AND hue.
+      Slight saturation/hue jitter simulates cross-device colour variance
+      between AIROGS (Topcon/Canon, Western clinics) and Chákṣu (Remidio/Forus/
+      Bosch, Indian clinics) without discarding the diagnostic colour signal.
+    • Normalisation uses standard per-channel RGB ImageNet stats.
     """
     if is_training:
         return transforms.Compose([
-            # ── Run-3: Strip colour FIRST ──────────────────────────────────
-            GrayscaleToRGB(),
-
             # ── Geometric augmentations (anatomically valid) ───────────────
             transforms.RandomHorizontalFlip(p=0.5),
             transforms.RandomVerticalFlip(p=0.5),
@@ -223,32 +190,117 @@ def get_transforms(is_training: bool = True) -> transforms.Compose:
             transforms.RandomAffine(
                 degrees=0,
                 translate=(0.1, 0.1),
-                scale=(0.85, 1.15),          # Slightly wider scale range
-                shear=5                       # Slight shear for perspective variety
+                scale=(0.85, 1.15),
+                shear=5
             ),
 
-            # ── Appearance augmentations (grayscale-safe) ─────────────────
-            # Brightness / contrast only — no saturation/hue on grayscale
+            # ── Colour augmentation — simulates cross-device variance ──────
+            # Saturation/hue jitter is intentionally mild: enough to teach
+            # device-invariance, not so strong as to destroy clinical signal.
             transforms.ColorJitter(
-                brightness=0.25,
-                contrast=0.25,
-                saturation=0.0,              # No-op on grayscale but harmless
-                hue=0.0                      # No-op on grayscale but harmless
+                brightness=0.3,
+                contrast=0.3,
+                saturation=0.15,
+                hue=0.05
             ),
 
             # Quality-variance simulation (glare, blur from handheld devices)
             transforms.RandomApply(
-                [transforms.GaussianBlur(kernel_size=3, sigma=(0.1, 1.5))], p=0.4
+                [transforms.GaussianBlur(kernel_size=3, sigma=(0.1, 1.5))], p=0.3
             ),
 
             transforms.ToTensor(),
-            transforms.Normalize(GRAY_MEAN, GRAY_STD),
+            transforms.Normalize(RGB_MEAN, RGB_STD),
         ])
     else:
         return transforms.Compose([
-            # ── Run-3: Strip colour for evaluation too ─────────────────────
-            GrayscaleToRGB(),
-
             transforms.ToTensor(),
-            transforms.Normalize(GRAY_MEAN, GRAY_STD),
+            transforms.Normalize(RGB_MEAN, RGB_STD),
         ])
+
+
+def get_strong_transforms() -> transforms.Compose:
+    """
+    Run-6 strong augmentation for augmentation-consistency regularisation.
+
+    Simulates extreme cross-device and cross-condition variance:
+      - Remidio FoP: handheld, prone to motion blur, glare, partial occlusion
+      - Forus 3Nethra: tabletop but lower resolution, different colour profile
+      - Bosch: different sensor spectral response
+
+    Intentionally more aggressive than get_transforms(is_training=True):
+      - Wider rotation (60° vs 30°) and scale range
+      - Heavier colour jitter (0.5/0.5/0.4/0.1 vs 0.3/0.3/0.15/0.05)
+      - RandomGrayscale: simulates monochrome acquisition mode
+      - Stronger GaussianBlur (kernel=5, σ up to 3.0)
+      - RandomSolarize: simulates bright specular glare on FoP housing
+      - RandomErasing: simulates partial occlusion / lens artifacts
+
+    Used in DualAugGlaucomaDataset alongside the standard weak transforms.
+    The consistency loss forces the model to produce the same prediction
+    under both augmentations, teaching device invariance.
+    """
+    return transforms.Compose([
+        transforms.RandomHorizontalFlip(p=0.5),
+        transforms.RandomVerticalFlip(p=0.5),
+        transforms.RandomRotation(degrees=60),
+        transforms.RandomAffine(
+            degrees=0,
+            translate=(0.15, 0.15),
+            scale=(0.75, 1.25),
+            shear=10,
+        ),
+        transforms.ColorJitter(
+            brightness=0.5,
+            contrast=0.5,
+            saturation=0.4,
+            hue=0.1,
+        ),
+        # Occasional grayscale — simulates monochrome capture mode
+        transforms.RandomGrayscale(p=0.1),
+        # Strong blur — handheld motion & defocus
+        transforms.RandomApply(
+            [transforms.GaussianBlur(kernel_size=5, sigma=(0.1, 3.0))], p=0.5
+        ),
+        # Solarize — specular glare from FoP housing (bright spot > threshold)
+        transforms.RandomApply(
+            [transforms.RandomSolarize(threshold=128)], p=0.2
+        ),
+        transforms.ToTensor(),
+        transforms.Normalize(RGB_MEAN, RGB_STD),
+        # Random erase after normalisation — partial occlusion / lens artifact
+        transforms.RandomErasing(p=0.3, scale=(0.02, 0.15), ratio=(0.3, 3.0), value=0),
+    ])
+
+
+class DualAugGlaucomaDataset(Dataset):
+    """
+    Returns (weak_image, strong_image, label) per index.
+
+    The same raw fundus image (after robust_circle_crop) is transformed
+    twice — once with the standard weak augmentation and once with the
+    heavier strong augmentation.  This is used by adapt_target.py's Run-6
+    augmentation-consistency loss (L_con).
+
+    Labels are present in the CSV but are IGNORED during adaptation.
+    They are returned only so the DataLoader collation works normally;
+    adapt_target.py discards them with `for weak, strong, _ in loader`.
+    """
+
+    def __init__(self, csv_file: str, weak_transform, strong_transform):
+        self.data             = pd.read_csv(csv_file)
+        self.weak_transform   = weak_transform
+        self.strong_transform = strong_transform
+
+    def __len__(self) -> int:
+        return len(self.data)
+
+    def __getitem__(self, idx: int):
+        row   = self.data.iloc[idx]
+        image = robust_circle_crop(row['path'])   # PIL RGB — read once, augment twice
+        label = int(row['label'])
+        return (
+            self.weak_transform(image),
+            self.strong_transform(image),
+            torch.tensor(label, dtype=torch.long),
+        )

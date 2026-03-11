@@ -1,9 +1,10 @@
 """
-run_full_pipeline.py - Run-3: Full Netra-Adapt Pipeline
+run_full_pipeline.py - Run-5: Full Netra-Adapt Pipeline
 
-Run-3 changes:
-- All result paths point to /workspace/results_run3/
-- Banner updated to reflect Run-3 (Grayscale + Balanced)
+Run-5 changes:
+- All result paths point to /workspace/results_run5/
+- Colour inputs restored (GrayscaleToRGB removed)
+- Banner updated to reflect Run-5
 
 Usage:
     python run_full_pipeline.py
@@ -54,8 +55,8 @@ def run_script(script_name, description):
 
 def main():
     print("\n" + "="*80)
-    print("   NETRA-ADAPT RUN-3: FULL EXPERIMENTAL PIPELINE")
-    print("   Cross-Ethnic Glaucoma Screening — Grayscale + Balanced Training")
+    print("   NETRA-ADAPT RUN-5: FULL EXPERIMENTAL PIPELINE")
+    print("   Cross-Ethnic Glaucoma Screening — Colour Restored + Label Fix")
     print("="*80)
     print(f"\nExperiment Start: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
@@ -73,19 +74,19 @@ def main():
         print("\n❌ Pipeline aborted: data preparation failed")
         return
 
-    # Step 2: Train Source Model (AIROGS — balanced + grayscale)
+    # Step 2: Train Source Model (AIROGS — balanced + colour)
     success, elapsed = run_script("train_source.py", "Phase A: Source Training (AIROGS) — balanced")
     results["train_source"] = {"success": success, "time": elapsed}
     if not success:
         print("\n❌ Pipeline aborted: source training failed")
         return
 
-    # Step 3: Train Oracle Model (Chákṣu — balanced + grayscale)
-    success, elapsed = run_script("train_oracle.py", "Phase B: Oracle Training (Chákṣu) — balanced")
+    # Step 3: Train Oracle Model (Chákṣu — balanced + colour + AUROC monitoring)
+    success, elapsed = run_script("train_oracle.py", "Phase B: Oracle Training (Chákṣu) — balanced + AUROC")
     results["train_oracle"] = {"success": success, "time": elapsed}
 
-    # Step 4: Adapt (MixEnt — grayscale-aware)
-    success, elapsed = run_script("adapt_target.py", "Phase C: MixEnt-Adapt SFDA — grayscale")
+    # Step 4: Adapt (MixEnt — colour)
+    success, elapsed = run_script("adapt_target.py", "Phase C: MixEnt-Adapt SFDA — colour")
     results["adapt_target"] = {"success": success, "time": elapsed}
     if not success:
         print("\n❌ Pipeline aborted: adaptation failed")
@@ -98,13 +99,13 @@ def main():
     # Summary
     total_time = time.time() - total_start
     print("\n" + "="*80)
-    print("   PIPELINE COMPLETE — RUN-3 SUMMARY")
+    print("   PIPELINE COMPLETE — RUN-5 SUMMARY")
     print("="*80)
     for step, info in results.items():
         status = "✅" if info["success"] else "❌"
         print(f"  {status} {step:<20} {info['time']/60:.1f} min")
     print(f"\n  Total time: {total_time/60:.1f} minutes")
-    print(f"  Results: /workspace/results_run3/evaluation/results_table.csv")
+    print(f"  Results: /workspace/results_run5/evaluation/results_table.csv")
     print("="*80)
 
     try:

@@ -194,8 +194,11 @@ def parse_chaksu_labels():
 
                 parts = raw_name.replace('\\', '/').split('/')
                 fname = parts[-1]
-                if '-' in fname and fname.count('-') > 0:
-                    fname = fname.split('-')[0]
+                # Run-4 FIX: do NOT split on '-'.
+                # Run-3 had fname.split('-')[0] here which truncated
+                # filenames like "REMIDIO-0001.jpg" to "REMIDIO", causing
+                # all Remidio images (76% of Chákṣu) to map to a single key
+                # and receive wrong labels. Use the full basename.
                 if not fname.lower().endswith(('.jpg', '.jpeg', '.png')):
                     fname += ".jpg"
 
@@ -217,6 +220,10 @@ def parse_chaksu_labels():
             print(f"    [ERROR] {os.path.basename(csv_file)}: {e}")
 
     print(f"  Total labels parsed: {len(label_map)}")
+    # Run-4: print sample keys so we can verify matching looks correct
+    if label_map:
+        sample_keys = list(label_map.keys())[:8]
+        print(f"  Sample label_map keys: {sample_keys}")
 
     # Step 3: Find all images
     image_patterns = [

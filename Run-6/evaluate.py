@@ -1,10 +1,13 @@
 """
-evaluate.py - Run-3: Comprehensive Model Evaluation for Netra-Adapt
+evaluate.py - Run-6: Comprehensive Model Evaluation for Netra-Adapt
 
-Run-3 change: result paths updated to /workspace/results_run3/
-              get_transforms() automatically applies GrayscaleToRGB so all
-              models are evaluated on the same grayscale inputs they were
-              trained/adapted on.
+Run-6 changes:
+  - Result paths updated to /workspace/results_run6/
+  - PrototypeMixEnt-Adapt with memory bank + consistency + self-training.
+  - prepare_data.py label-matching bug fixed: Run-5 only matched Bosch images
+    (145/1345), giving a test set with 1 glaucoma in 41 samples — statistically
+    useless. Run-6 fix ensures Remidio + Forus labels are also matched, giving
+    a test set with 300+ images and reliable glaucoma representation.
 
 Evaluates all trained models on the labeled Chákṣu test set:
 - Phase A: Source model (baseline from AIROGS)
@@ -33,24 +36,33 @@ from training_logger import get_logger
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 TEST_CSV_CHAKSU = "/workspace/data/processed_csvs/chaksu_test_labeled.csv"
 TEST_CSV_AIROGS = "/workspace/data/processed_csvs/airogs_test.csv"
-RESULTS_DIR     = "/workspace/results_run3/evaluation"
+RESULTS_DIR     = "/workspace/results_run6/evaluation"
 
 MODELS_CHAKSU = {
     "Pretrained → Chákṣu":     None,
-    "AIROGS → Chákṣu":        "/workspace/results_run3/Source_AIROGS/model.pth",
-    "Chákṣu → Chákṣu":        "/workspace/results_run3/Oracle_Chaksu/oracle_model.pth",
-    "AIROGS+Adapt → Chákṣu":  "/workspace/results_run3/Netra_Adapt/adapted_model.pth",
+    "AIROGS → Chákṣu":        "/workspace/results_run6/Source_AIROGS/model.pth",
+    "Chákṣu → Chákṣu":        "/workspace/results_run6/Oracle_Chaksu/oracle_model.pth",
+    "AIROGS+Adapt → Chákṣu":  "/workspace/results_run6/Netra_Adapt/adapted_model.pth",
 }
 
 MODELS_AIROGS = {
-    "AIROGS → AIROGS": "/workspace/results_run3/Source_AIROGS/model.pth",
+    "AIROGS → AIROGS": "/workspace/results_run6/Source_AIROGS/model.pth",
 }
 
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
 
-def evaluate(model_path, name, test_csv):
-    """Evaluate a single model on the test set with comprehensive metrics."""
+def evaluate(model_path, name, test_csv, use_mean_pool=False):
+    """
+    Evaluate a single model on the test set with comprehensive metrics.
+
+    use_mean_pool=True: classify via mean-pooled patch tokens [B, 1:, D].mean(1)
+    use_mean_pool=False: classify via CLS token (standard forward)
+
+    The adapted model (AIROGS+Adapt) requires use_mean_pool=True because
+    its head was re-trained during adaptation on mean-pooled patch features,
+    not CLS tokens.  All other models use CLS (consistent with their training).
+    """
     model = NetraModel(num_classes=2).to(DEVICE)
 
     if model_path is None:
@@ -63,7 +75,6 @@ def evaluate(model_path, name, test_csv):
 
     model.eval()
 
-    # Run-3: get_transforms(is_training=False) applies GrayscaleToRGB
     dataset = GlaucomaDataset(test_csv, transform=get_transforms(is_training=False))
     loader  = DataLoader(dataset, batch_size=32, shuffle=False, num_workers=4)
 
@@ -74,7 +85,14 @@ def evaluate(model_path, name, test_csv):
         for images, labels in tqdm(loader, desc=f"  Evaluating", leave=False):
             images = images.to(DEVICE)
             with torch.autocast(device_type=DEVICE, dtype=torch.bfloat16):
-                logits = model(images)
+                if use_mean_pool:
+                    # Adapted model: head was trained on mean-pooled patch tokens
+                    all_toks = model.extract_all_tokens(images)   # [B, N+1, D]
+                    feats    = all_toks[:, 1:].mean(dim=1)        # [B, D]
+                    logits   = model.head(feats)
+                else:
+                    # Source / Oracle: head was trained on CLS token
+                    logits = model(images)
                 probs  = torch.softmax(logits, dim=1)[:, 1]
             all_labels.extend(labels.cpu().numpy())
             all_probs.extend(probs.float().cpu().numpy())
@@ -139,7 +157,7 @@ def plot_roc_curves(all_results):
     plt.plot([0, 1], [0, 1], 'k--', linewidth=1.5, alpha=0.5, label='Random (AUROC=0.500)')
     plt.xlabel('False Positive Rate (1 - Specificity)', fontsize=13, fontweight='bold')
     plt.ylabel('True Positive Rate (Sensitivity)', fontsize=13, fontweight='bold')
-    plt.title('ROC Curves — Run-3 (Grayscale + Balanced)', fontsize=15, fontweight='bold')
+    plt.title('ROC Curves — Run-6 (PrototypeMixEnt + Consistency + Self-Training)', fontsize=15, fontweight='bold')
     plt.legend(loc='lower right', fontsize=11, framealpha=0.9)
     plt.grid(True, alpha=0.3, linestyle='--')
     plt.xlim([-0.02, 1.02])
@@ -194,7 +212,7 @@ def plot_metrics_comparison(all_results):
         ax.set_ylim([0, 1.05])
         ax.grid(axis='y', alpha=0.3, linestyle='--')
         ax.set_axisbelow(True)
-    plt.suptitle('Performance Metrics — Run-3 (Grayscale + Balanced)', fontsize=15,
+    plt.suptitle('Performance Metrics — Run-6 (PrototypeMixEnt + Consistency + Self-Training)', fontsize=15,
                  fontweight='bold', y=1.00)
     plt.tight_layout()
     plt.savefig(f"{RESULTS_DIR}/metrics_comparison.png", dpi=300, bbox_inches='tight')
@@ -230,9 +248,22 @@ def save_results_table(all_results):
 def main():
     exp_logger = get_logger()
     print("\n" + "="*70)
-    print("   NETRA-ADAPT RUN-3: COMPREHENSIVE EVALUATION")
-    print("   Grayscale inputs  +  Balanced training")
+    print("   NETRA-ADAPT RUN-6: COMPREHENSIVE EVALUATION")
+    print("   PrototypeMixEnt + Consistency Loss + Progressive Self-Training")
     print("="*70)
+
+    # Report test set composition so we know if results are reliable
+    if os.path.exists(TEST_CSV_CHAKSU):
+        import pandas as _pd
+        _df = _pd.read_csv(TEST_CSV_CHAKSU)
+        _n_pos = int((_df['label'] == 1).sum())
+        _n_neg = int((_df['label'] == 0).sum())
+        print(f"\n[TEST SET] Chákṣu: {len(_df)} total — {_n_pos} glaucoma / {_n_neg} normal")
+        if _n_pos < 5:
+            print(f"  ⚠  WARNING: only {_n_pos} positive(s) — AUROC unreliable (discrete steps of 1/{_n_neg})")
+            print(f"     Check prepare_data.py label matching (Run-6 fix should give 20+ positives)")
+        else:
+            print(f"  ✓  {_n_pos} positives — results are statistically meaningful")
 
     # Sanity check on AIROGS
     print("\n[SANITY CHECK] Evaluating on AIROGS Test Set")
@@ -258,7 +289,9 @@ def main():
     for name, path in MODELS_CHAKSU.items():
         print(f"\n{name}")
         print("-" * 70)
-        metrics = evaluate(path, name, TEST_CSV_CHAKSU)
+        # Adapted model's head was trained on mean-pooled patches during adaptation
+        use_mp = (name == "AIROGS+Adapt \u2192 Ch\u00e1k\u1e63u")
+        metrics = evaluate(path, name, TEST_CSV_CHAKSU, use_mean_pool=use_mp)
         if metrics:
             all_results[name] = metrics
             metrics_log = {k: float(v) for k, v in metrics.items()

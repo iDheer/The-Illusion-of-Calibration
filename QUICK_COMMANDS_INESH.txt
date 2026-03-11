@@ -1,0 +1,45 @@
+# 1. Install the official Kaggle client
+pip install kaggle
+
+# 2. Set the token variable (copy-pasted from your message)
+export KAGGLE_API_TOKEN=KGAT_0976ca4654d6cf8831b434187fc9660d
+
+# 3. Download the dataset
+# Note: This dataset slug already includes "v2" in the name, matching your screenshot
+kaggle datasets download -d deathtrooper/glaucoma-dataset-eyepacs-airogs-light-v2
+
+# 4. Unzip the data
+unzip glaucoma-dataset-eyepacs-airogs-light-v2.zip -d glaucoma_dataset
+
+
+(MAKE SURE ALL THE DOWNLOADED STUFF IS IN A SUBFOLDER CALLED "data")
+
+
+
+# Now run the script
+python3 download_chaksu.py
+
+FORMAT NEEDED
+
+
+/workspace/Netra_Adapt/
+
+└── data/
+    ├── Train.zip                (8.1 GB - CHAKSHU train)
+    └── Test.zip                 (2.6 GB - CHAKSHU test)
+
+
+cd /workspace/Netra_Adapt
+chmod +x setup_with_download.sh
+./setup_with_download.sh
+
+python prepare_data.py
+python run_full_pipeline.py
+
+
+hugginface token needed- go to huggingface, invalide refresh and paste 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
+
+cd /workspace/Run-5
+export HF_TOKEN=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
+bash setup_data.sh       # organise raw AIROGS + Chákṣu into /workspace/data/
+bash run_everything.sh   # runs all 4 phases end to end

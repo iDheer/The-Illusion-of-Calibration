@@ -1,20 +1,15 @@
 """
 train_source.py - Run-3: Phase A — Source Training on AIROGS
 
-Run-3 changes vs Run-1/2
-─────────────────────────
-1. CLASS BALANCE: WeightedRandomSampler ensures each training batch
-   contains approximately equal numbers of RG (glaucoma) and NRG (normal)
-   images, regardless of the raw dataset ratio.  This prevents the model
-   from implicitly learning "always predict Normal" due to the ~10:1
-   class imbalance in AIROGS.
+   Run-4 changes vs Run-3
+───────────────────────
+1. CLASS BALANCE: WeightedRandomSampler + weighted CrossEntropyLoss kept
+   from Run-3 — these were correct.
 
-2. WEIGHTED LOSS: nn.CrossEntropyLoss(weight=class_weights) additionally
-   upweights the contribution of the minority class (glaucoma) in the
-   gradient signal — a second line of defence against imbalance bias.
-
-3. GRAYSCALE: get_transforms() from dataset_loader.py now applies
-   GrayscaleToRGB as the first step.  No code change needed here.
+2. COLOUR RESTORED: GrayscaleToRGB removed in dataset_loader.py.
+   Run-3 showed grayscale destroys diagnostic signal on the small
+   Chákṣu dataset (Oracle AUROC=0.497). Colour inputs restored.
+   Full colour jitter (saturation + hue) also restored.
 """
 
 import os
@@ -36,7 +31,7 @@ MAX_EPOCHS = 60
 EARLY_STOP_PATIENCE = 8
 MIN_DELTA = 1e-5
 CSV_PATH  = "/workspace/data/processed_csvs/airogs_train.csv"
-SAVE_DIR  = "/workspace/results_run3/Source_AIROGS"
+SAVE_DIR  = "/workspace/results_run5/Source_AIROGS"
 
 
 def train():
@@ -68,9 +63,8 @@ def train():
         "weight_decay": 0.01,
         "loss": "CrossEntropyLoss (weighted)",
         "device": DEVICE,
-        # Run-3 additions
-        "run3_class_balance": "WeightedRandomSampler + weighted loss",
-        "run3_grayscale": "GrayscaleToRGB in transforms",
+        "run4_class_balance": "WeightedRandomSampler + weighted loss",
+        "run4_colour": "Full RGB (grayscale removed)",
     }
     exp_logger.log_phase_start("source", hyperparameters)
 
@@ -118,7 +112,7 @@ def train():
     print("\n" + "="*60)
     print("   PHASE A: SOURCE TRAINING ON AIROGS (WESTERN EYES)")
     print("   Run-3: Balanced sampling + weighted loss (class balance fix)")
-    print("   Run-3: Grayscale inputs (colour bias removal)")
+    print("   Run-5: Full RGB colour inputs (grayscale removed in Run-4)")
     print("   Early Stopping: patience={}, min_delta={}".format(EARLY_STOP_PATIENCE, MIN_DELTA))
     print("="*60)
 
