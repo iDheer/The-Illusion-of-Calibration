@@ -40,6 +40,8 @@ python run_full_pipeline.py
 hugginface token needed- go to huggingface, invalide refresh and paste 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
 
 cd /workspace/Run-5
-export HF_TOKEN=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
+export HF_TOKEN= <YOUR_TOKEN>
+
+meratokenHsestarthotahailiterallynextcharacterhf_njXVOiGhaGPMbxgWWWTnbhgEMzmrQkjBzp
 bash setup_data.sh       # organise raw AIROGS + Chákṣu into /workspace/data/
 bash run_everything.sh   # runs all 4 phases end to end

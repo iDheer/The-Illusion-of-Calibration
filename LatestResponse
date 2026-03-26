@@ -1,0 +1,52 @@
+Here are the exact commands to run on your vast.ai instance from start to finish.
+
+**Step 1: SSH into your vast.ai instance**
+*(Use the SSH command provided by the vast.ai dashboard, it usually looks something like this)*
+```bash
+ssh -p <PORT> root@<IP_ADDRESS> -L 8080:localhost:8080
+```
+
+**Step 2: Sync your latest code from GitHub**
+*(Assuming you have pushed your latest Run-7 to your repo)*
+```bash
+cd /workspace/Netra-Adapt-Test-Time-Style-Calibration-of-Foundation-Models-for-Cross-Ethnic-Glaucoma-Screening
+git pull origin main
+```
+
+**Step 3: Navigate to the active working directory**
+```bash
+cd /workspace/Netra-Adapt-Test-Time-Style-Calibration-of-Foundation-Models-for-Cross-Ethnic-Glaucoma-Screening/Run-7
+```
+
+**Step 4: Activate the virtual environment**
+*(Since you previously set up the environment during Run-6, just activate it)*
+```bash
+source /venv/main/bin/activate
+```
+
+**Step 5: Export your HuggingFace Token**
+*(Required to download the DINOv3 weights)*
+```bash
+export HF_TOKEN=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
+```
+
+**Step 6: Run the entire pipeline**
+*(This script will sequentially run data prep, source training, oracle training, adaptation, and evaluation)*
+```bash
+bash run_everything.sh
+```
+
+---
+
+### What happens now?
+Once that command is running, you can step away. It will take a few hours to complete all phases. When it is finished, it will automatically test everything and output a beautiful table to your terminal with the new `Netra-Adapt` AUROC, alongside the `Pretrained`, `Source`, and `Oracle` baselines.
+
+If the SSH connection drops while it's running, you might lose the terminal output. If you want to be completely safe against disconnections, you can run it inside `tmux` instead:
+
+*(Safe execution alternative)*
+```bash
+tmux new -s run7
+export HF_TOKEN=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
+bash run_everything.sh
+# If you get disconnected, log back in and type: tmux attach -t run7
+```
