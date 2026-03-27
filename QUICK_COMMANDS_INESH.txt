@@ -11,16 +11,12 @@ kaggle datasets download -d deathtrooper/glaucoma-dataset-eyepacs-airogs-light-v
 # 4. Unzip the data
 unzip glaucoma-dataset-eyepacs-airogs-light-v2.zip -d glaucoma_dataset
 
-
 (MAKE SURE ALL THE DOWNLOADED STUFF IS IN A SUBFOLDER CALLED "data")
-
-
 
 # Now run the script
 python3 download_chaksu.py
 
 FORMAT NEEDED
-
 
 /workspace/Netra_Adapt/
 
@@ -29,18 +25,10 @@ FORMAT NEEDED
     └── Test.zip                 (2.6 GB - CHAKSHU test)
 
 
-cd /workspace/Netra_Adapt
-chmod +x setup_with_download.sh
-./setup_with_download.sh
-
-python prepare_data.py
-python run_full_pipeline.py
-
-
-hugginface token needed- go to huggingface, invalide refresh and paste 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
+hugginface token needed- go to huggingface, invalide refresh and paste
 
 cd /workspace/Run-5
-export HF_TOKEN= <YOUR_TOKEN>
+export HF_TOKEN= <YOUR_TOKEN> hf _ BLVNRdjOiRNhGSDRMrIEFvYslmAoocmwvy
 
 bash setup_data.sh       # organise raw AIROGS + Chákṣu into /workspace/data/
 bash run_everything.sh   # runs all 4 phases end to end
