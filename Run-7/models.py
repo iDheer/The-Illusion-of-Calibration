@@ -49,21 +49,14 @@ class NetraModel(nn.Module):
 
         # Unfreeze last N transformer blocks for adaptation
         if unfreeze_blocks > 0:
-            if hasattr(self.backbone, 'layer'):
-                blocks = self.backbone.layer
-            elif hasattr(self.backbone, 'blocks'):
-                blocks = self.backbone.blocks
-            elif hasattr(self.backbone, 'encoder') and hasattr(self.backbone.encoder, 'layer'):
-                blocks = self.backbone.encoder.layer
-            else:
-                print(f"  Warning: Could not find transformer blocks.")
-                blocks = []
-
-            if blocks:
-                for layer in blocks[-unfreeze_blocks:]:
+            blocks = self._find_transformer_blocks()
+            if blocks is not None:
+                for layer in list(blocks)[-unfreeze_blocks:]:
                     for param in layer.parameters():
                         param.requires_grad = True
                 print(f"  Unfroze last {unfreeze_blocks} transformer blocks")
+            else:
+                print(f"  Warning: Could not find transformer blocks.")
 
         # Classification head
         self.head = nn.Linear(self.feature_dim, num_classes)
@@ -89,16 +82,48 @@ class NetraModel(nn.Module):
         outputs = self.backbone(x)
         return outputs.last_hidden_state
 
+    def _find_transformer_blocks(self):
+        """
+        Recursively walk backbone's named modules to find the nn.ModuleList
+        that holds the transformer layers.  Works regardless of how deeply
+        AutoModel wraps the encoder (e.g. backbone.encoder.layer for DINOv3,
+        backbone.blocks for timm ViTs, backbone.layer for older HF models).
+
+        Heuristic: the first nn.ModuleList whose children are all the same
+        class (homogeneous) AND that list has at least 6 members is the
+        transformer block stack.
+        """
+        import torch.nn as nn
+        # Fast-path: common attribute names checked without full walk
+        for attr_path in ('encoder.layer', 'layer', 'blocks', 'encoder.blocks',
+                          'transformer.layer', 'transformer.blocks'):
+            obj = self.backbone
+            found = True
+            for part in attr_path.split('.'):
+                if hasattr(obj, part):
+                    obj = getattr(obj, part)
+                else:
+                    found = False
+                    break
+            if found and isinstance(obj, nn.ModuleList) and len(obj) >= 6:
+                return obj
+
+        # Slow-path: walk all named modules
+        for name, module in self.backbone.named_modules():
+            if isinstance(module, nn.ModuleList) and len(module) >= 6:
+                child_types = set(type(c).__name__ for c in module)
+                if len(child_types) == 1:   # homogeneous — this is the block stack
+                    return module
+
+        return None
+
     def freeze_backbone(self):
         for param in self.backbone.parameters():
             param.requires_grad = False
 
     def unfreeze_last_blocks(self, n=2):
-        if hasattr(self.backbone, 'layer'):
-            for layer in self.backbone.layer[-n:]:
-                for param in layer.parameters():
-                    param.requires_grad = True
-        elif hasattr(self.backbone, 'encoder') and hasattr(self.backbone.encoder, 'layer'):
-            for layer in self.backbone.encoder.layer[-n:]:
+        blocks = self._find_transformer_blocks()
+        if blocks is not None:
+            for layer in list(blocks)[-n:]:
                 for param in layer.parameters():
                     param.requires_grad = True

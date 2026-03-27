@@ -113,8 +113,21 @@ def train():
     # Initialize model
     model = NetraModel(num_classes=2).to(DEVICE)
 
+    # Resolve transformer blocks via the same helper used in NetraModel.__init__
+    backbone_blocks = model._find_transformer_blocks()
+    if backbone_blocks is None:
+        raise RuntimeError(
+            "Could not locate transformer blocks in DINOv3 backbone.\n"
+            "Run: python -c \"from models import NetraModel; m=NetraModel(); "
+            "[print(n) for n,_ in m.backbone.named_modules()]\" to inspect."
+        )
+    import itertools
+    last2_params = itertools.chain(
+        list(backbone_blocks)[-2].parameters(),
+        list(backbone_blocks)[-1].parameters(),
+    )
     optimizer = optim.AdamW([
-        {'params': model.backbone.layer[-2:].parameters(), 'lr': 1e-5},
+        {'params': last2_params, 'lr': 1e-5},
         {'params': model.head.parameters(), 'lr': 1e-3}
     ], weight_decay=0.01)
 
