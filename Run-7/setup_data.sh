@@ -64,6 +64,8 @@ else
         "$BASE_DIR/glaucoma_dataset" \
         "$DATA_DIR/glaucoma_dataset/eyepac-light-v2-512-jpg" \
         "$DATA_DIR/glaucoma_dataset" \
+        "$BASE_DIR/Run-7/glaucoma_dataset/eyepac-light-v2-512-jpg" \
+        "$BASE_DIR/Run-7/glaucoma_dataset" \
         "$DATA_DIR/airogs" \
         "$BASE_DIR/airogs"
     do
@@ -73,9 +75,9 @@ else
         fi
     done
 
-    # Fallback: walk the whole workspace looking for a folder named RG
+    # Fallback: walk the whole workspace looking for a folder named RG (ignoring the empty one we just made)
     if [ -z "$AIROGS_SOURCE" ]; then
-        FOUND_RG=$(find "$BASE_DIR" -maxdepth 6 -type d -name "RG" 2>/dev/null | head -1)
+        FOUND_RG=$(find "$BASE_DIR" -maxdepth 6 -type d -name "RG" | grep -v "raw_airogs/RG" | head -1)
         if [ -n "$FOUND_RG" ]; then
             AIROGS_SOURCE=$(dirname "$FOUND_RG")
         fi

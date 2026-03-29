@@ -14,7 +14,7 @@ unzip glaucoma-dataset-eyepacs-airogs-light-v2.zip -d glaucoma_dataset
 (MAKE SURE ALL THE DOWNLOADED STUFF IS IN A SUBFOLDER CALLED "data")
 
 # Now run the script
-python3 download_chaksu.py
+python3 download_chakshu.py
 
 FORMAT NEEDED
 

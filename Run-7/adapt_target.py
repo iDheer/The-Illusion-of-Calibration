@@ -389,9 +389,20 @@ def run_adapt():
     style_bank = ProtoStyleBank(K=BANK_K, D=model.feature_dim)
 
     # ── Optimizer + cosine scheduler ─────────────────────────────────────────
+    backbone_blocks = model._find_transformer_blocks()
+    if backbone_blocks is None:
+        raise RuntimeError(
+            "Could not locate transformer blocks in DINOv3 backbone. "
+            "Check models.py _find_transformer_blocks()."
+        )
+    import itertools
+    last2_params = itertools.chain(
+        list(backbone_blocks)[-2].parameters(),
+        list(backbone_blocks)[-1].parameters(),
+    )
     optimizer = optim.AdamW([
-        {'params': model.backbone.layer[-2:].parameters(), 'lr': BASE_LR_BACKBONE},
-        {'params': model.head.parameters(),                'lr': BASE_LR_HEAD},
+        {'params': last2_params,            'lr': BASE_LR_BACKBONE},
+        {'params': model.head.parameters(), 'lr': BASE_LR_HEAD},
     ], weight_decay=0.001)
 
     # Cosine annealing applies only to the post-warmup training epochs
