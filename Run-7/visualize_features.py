@@ -8,8 +8,8 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 # Import your existing models and data loaders
-from models import NetraDINOv3
-from dataset_loader import ChaksuDataset # assuming this exists or similar
+from models import NetraModel
+from dataset_loader import GlaucomaDataset 
 
 def extract_features(model, dataloader, device):
     """
@@ -23,9 +23,8 @@ def extract_features(model, dataloader, device):
     with torch.no_grad():
         for images, labels in tqdm(dataloader, desc="Extracting Features"):
             images = images.to(device)
-            # Assuming models.py NetraDINOv3 has a method or we can intercept
-            # If NetraDINOv3 returns logits, we might need its backbone features directly
-            features = model.backbone(images) 
+            # Use the built-in NetraModel method to extract the proper CLS token features
+            features = model.extract_features(images) 
             # flatten if necessary
             if len(features.shape) > 2:
                 features = features.view(features.size(0), -1)
@@ -57,8 +56,8 @@ def main():
     # CONFIGURATION (Update paths if they differ slightly)
     # ---------------------------------------------------------
     SOURCE_MODEL_PATH = "/workspace/results_run7/Source_AIROGS/model.pth"
-    ADAPTED_MODEL_PATH = "/workspace/results_run7/SFDA_Target/model.pth"
-    DATA_DIR = "/workspace/data/chaksu" # Target dataset
+    ADAPTED_MODEL_PATH = "/workspace/results_run7/Netra_Adapt/adapted_model.pth"
+    DATA_CSV = "/workspace/data/processed_csvs/chaksu_test_labeled.csv" # Target dataset
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
@@ -67,36 +66,36 @@ def main():
     try:
         from torchvision import transforms
         transform = transforms.Compose([
-            transforms.Resize((224, 224)),
+            transforms.Resize((512, 512)),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
-        dataset = ChaksuDataset(root_dir=DATA_DIR, transform=transform)
+        dataset = GlaucomaDataset(csv_file=DATA_CSV, transform=transform)
         dataloader = DataLoader(dataset, batch_size=32, shuffle=False, num_workers=4)
     except Exception as e:
         print(f"Dataset loading error: {e}")
-        print("Please ensure DATA_DIR points to the correct Chaksu path.")
+        print("Please ensure DATA_CSV points to the correct Chaksu CSV path.")
         return
 
     # 2. Extract and Plot: ZERO-SHOT SOURCE MODEL
     print("\n--- Evaluating Zero-Shot Source Model ---")
     if os.path.exists(SOURCE_MODEL_PATH):
-        model_source = NetraDINOv3(num_classes=2).to(device)
+        model_source = NetraModel(num_classes=2).to(device)
         model_source.load_state_dict(torch.load(SOURCE_MODEL_PATH, map_location=device))
         
         feats_src, labels_src = extract_features(model_source, dataloader, device)
-        plot_tsne(feats_src, labels_src, "t-SNE: Zero-Shot Source Model Features (Good Separation)", "Run-7/tsne_source.png")
+        plot_tsne(feats_src, labels_src, "t-SNE: Zero-Shot Source Model Features (Good Separation)", "tsne_source.png")
     else:
         print(f"Source model not found at {SOURCE_MODEL_PATH}")
 
     # 3. Extract and Plot: ADAPTED TARGET MODEL (The Collapsed One)
     print("\n--- Evaluating Adapted Model (Mode Collapse) ---")
     if os.path.exists(ADAPTED_MODEL_PATH):
-        model_adapted = NetraDINOv3(num_classes=2).to(device)
+        model_adapted = NetraModel(num_classes=2).to(device)
         model_adapted.load_state_dict(torch.load(ADAPTED_MODEL_PATH, map_location=device))
         
         feats_tgt, labels_tgt = extract_features(model_adapted, dataloader, device)
-        plot_tsne(feats_tgt, labels_tgt, "t-SNE: SFDA Adapted Model Features (Catastrophic Mode Collapse)", "Run-7/tsne_adapted.png")
+        plot_tsne(feats_tgt, labels_tgt, "t-SNE: SFDA Adapted Model Features (Catastrophic Mode Collapse)", "tsne_adapted.png")
     else:
         print(f"Adapted model not found at {ADAPTED_MODEL_PATH}")
         

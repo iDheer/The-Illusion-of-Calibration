@@ -28,7 +28,7 @@ FORMAT NEEDED
 hugginface token needed- go to huggingface, invalide refresh and paste
 
 cd /workspace/Run-5
-export HF_TOKEN= <YOUR_TOKEN> hf _ BLVNRdjOiRNhGSDRMrIEFvYslmAoocmwvy
+export HF_TOKEN= <YOUR_TOKEN> hf _ FQqqaHpuRzFIYvkuuWogqnSAEZxbSKzJPk
 
 bash setup_data.sh       # organise raw AIROGS + Chákṣu into /workspace/data/
 bash run_everything.sh   # runs all 4 phases end to end

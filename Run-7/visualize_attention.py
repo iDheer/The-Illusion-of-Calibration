@@ -10,7 +10,7 @@ import cv2
 
 # Import your model and dataset
 from models import NetraModel
-from dataset_loader import ChaksuDataset
+from dataset_loader import GlaucomaDataset
 
 def generate_attention_map(image_tensor, model, device):
     """
@@ -30,11 +30,13 @@ def generate_attention_map(image_tensor, model, device):
         # Mean across all 16 attention heads
         attn_heads_mean = last_layer_attention.mean(dim=1)  # Shape: [1, seq_len, seq_len]
         
-        # We only care about what the [CLS] token (index 0) is attending to (indices 1 to end)
-        cls_attention = attn_heads_mean[0, 0, 1:]  # Shape: [num_patches]
+        # DINOv3 uses 4 "register" tokens in addition to the [CLS] token.
+        # To avoid shape mismatches, we strictly extract only the final N tokens representing the actual image patches.
+        num_patches = (image_tensor.shape[1] // 16) * (image_tensor.shape[2] // 16)
+        cls_attention = attn_heads_mean[0, 0, -num_patches:]  # Grab exactly the last 1024 patch tokens
         
-        # For a 512x512 input with 16x16 patch size, we have 32x32 patches
-        grid_size = int(np.sqrt(cls_attention.shape[0]))
+        # Reshape to a 32x32 grid
+        grid_size = int(np.sqrt(num_patches))
         cls_attention = cls_attention.reshape(grid_size, grid_size)
         
         # Normalize between 0 and 1
@@ -68,8 +70,8 @@ def main():
     # CONFIGURATION
     # ---------------------------------------------------------
     SOURCE_MODEL_PATH = "/workspace/results_run7/Source_AIROGS/model.pth"
-    ADAPTED_MODEL_PATH = "/workspace/results_run7/SFDA_Target/model.pth"
-    DATA_DIR = "/workspace/data/chaksu" # Target dataset
+    ADAPTED_MODEL_PATH = "/workspace/results_run7/Netra_Adapt/adapted_model.pth"
+    DATA_CSV = "/workspace/data/processed_csvs/chaksu_test_labeled.csv" # Target dataset
     NUM_SAMPLES = 3 # How many images to visualize
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -77,14 +79,14 @@ def main():
     
     # 1. Load the Models
     print("Loading Source Model...")
-    model_source = NetraModel(num_classes=2).to(device)
+    model_source = NetraModel(num_classes=2, attn_implementation="eager").to(device)
     if os.path.exists(SOURCE_MODEL_PATH):
         model_source.load_state_dict(torch.load(SOURCE_MODEL_PATH, map_location=device))
     else:
         print(f"WARNING: Source model {SOURCE_MODEL_PATH} not found.")
         
     print("Loading Adapted (Collapsed) Model...")
-    model_adapted = NetraModel(num_classes=2).to(device)
+    model_adapted = NetraModel(num_classes=2, attn_implementation="eager").to(device)
     if os.path.exists(ADAPTED_MODEL_PATH):
         model_adapted.load_state_dict(torch.load(ADAPTED_MODEL_PATH, map_location=device))
     else:
@@ -96,9 +98,9 @@ def main():
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
-    dataset = ChaksuDataset(root_dir=DATA_DIR, transform=transform)
+    dataset = GlaucomaDataset(csv_file=DATA_CSV, transform=transform)
     # Pick a few glaucoma images if possible (label == 1)
-    glaucoma_indices = [i for i in range(len(dataset)) if dataset.labels[i] == 1]
+    glaucoma_indices = [i for i in range(len(dataset)) if dataset.data['label'].iloc[i] == 1]
     sample_indices = glaucoma_indices[:NUM_SAMPLES] if glaucoma_indices else range(NUM_SAMPLES)
     
     # 3. Generate Visualizations
@@ -137,8 +139,8 @@ def main():
             traceback.print_exc()
 
     plt.tight_layout()
-    plt.savefig("Run-7/attention_maps_comparison.png", dpi=300, bbox_inches='tight')
-    print("Saved comparison heatmaps to Run-7/attention_maps_comparison.png")
+    plt.savefig("attention_maps_comparison.png", dpi=300, bbox_inches='tight')
+    print("Saved comparison heatmaps to attention_maps_comparison.png")
 
 if __name__ == "__main__":
     main()

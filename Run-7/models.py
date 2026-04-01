@@ -34,13 +34,18 @@ class NetraModel(nn.Module):
 
     MODEL_ID = "facebook/dinov3-vitl16-pretrain-lvd1689m"
 
-    def __init__(self, num_classes=2, unfreeze_blocks=2):
+    def __init__(self, num_classes=2, unfreeze_blocks=2, attn_implementation=None):
         super().__init__()
 
         import os
         hf_token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN") or os.environ.get("HUGGINGFACE_TOKEN")
-        print(f"Loading DINOv3 ViT-L/16 backbone from {self.MODEL_ID}...")
-        self.backbone = AutoModel.from_pretrained(self.MODEL_ID, token=hf_token)
+        print(f"Loading DINOv3 ViT-L/16 backbone from {self.MODEL_ID}...")      
+        
+        kwargs = {}
+        if attn_implementation:
+            kwargs["attn_implementation"] = attn_implementation
+            
+        self.backbone = AutoModel.from_pretrained(self.MODEL_ID, token=hf_token, **kwargs)
         self.feature_dim = self.backbone.config.hidden_size  # 1024
 
         # Freeze entire backbone initially

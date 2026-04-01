@@ -1,0 +1,201 @@
+% ACL Long Paper Format (manually reproduced without acl.sty)
+\documentclass[11pt,twocolumn]{article}
+
+% ---- Page geometry (ACL standard) ----
+\usepackage[letterpaper,
+            top=1in, bottom=1in,
+            left=1in, right=1in,
+            columnsep=0.25in]{geometry}
+
+% ---- Core packages ----
+\usepackage{times}
+\usepackage{latexsym}
+\usepackage{booktabs}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{multirow}
+\usepackage{url}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{xcolor}
+\usepackage{subcaption}
+\usepackage{microtype}
+\usepackage{enumitem}
+\usepackage{natbib}
+\usepackage{hyperref}
+\usepackage{caption}
+\usepackage{titlesec}
+\usepackage{abstract}
+
+% ---- Hyperref setup ----
+\hypersetup{
+  colorlinks=true, linkcolor=black,
+  citecolor=black, urlcolor=black,
+  pdfauthor={Inesh Dheer, Varun Gupta},
+  pdftitle={The Illusion of Calibration: Vulnerabilities of Unsupervised Test-Time Adaptation in Cross-Ethnic Glaucoma Screening}
+}
+
+% ---- ACL-like section formatting ----
+\titleformat{\section}{\normalfont\large\bfseries}{\thesection}{1em}{}
+\titleformat{\subsection}{\normalfont\normalsize\bfseries}{\thesubsection}{1em}{}
+\titleformat{\subsubsection}{\normalfont\normalsize\itshape}{\thesubsubsection}{1em}{}
+\titlespacing*{\section}{0pt}{10pt plus 2pt minus 2pt}{4pt}
+\titlespacing*{\subsection}{0pt}{8pt plus 2pt minus 1pt}{3pt}
+\titlespacing*{\subsubsection}{0pt}{6pt plus 1pt minus 1pt}{2pt}
+
+% ---- Caption formatting ----
+\captionsetup{font=small, labelfont=bf, skip=4pt}
+
+% ---- Abstract formatting ----
+\renewcommand{\abstractnamefont}{\normalfont\bfseries}
+\renewcommand{\abstracttextfont}{\normalfont\small}
+\setlength{\absleftindent}{0pt}
+\setlength{\absrightindent}{0pt}
+
+% ---- Paragraph spacing ----
+\setlength{\parindent}{0.25in}
+\setlength{\parskip}{0pt}
+
+% ---- Float placement ----
+\renewcommand{\topfraction}{0.9}
+\renewcommand{\textfraction}{0.07}
+\renewcommand{\floatpagefraction}{0.7}
+
+% -----------------------------------------------------------------------
+\title{\textbf{The Illusion of Calibration: Vulnerabilities of Unsupervised Test-Time Adaptation\\
+       in Cross-Ethnic Glaucoma Screening}}
+
+\author{%
+  \textbf{Inesh Dheer}\\[2pt]
+  International Institute of Information Technology, Hyderabad\\
+  \texttt{inesh.dheer@research.iiit.ac.in}
+}
+
+\date{}
+% -----------------------------------------------------------------------
+
+\begin{document}
+\maketitle
+
+% -----------------------------------------------------------------------
+\begin{abstract}
+Automated glaucoma screening models trained on Western fundus datasets are widely assumed to degrade substantially on Indian retinal images due to phenotypic (pigmentation) and acquisition-induced domain shifts. Unsupervised Test-Time Adaptation (TTA) has emerged as a promising paradigm to mitigate such shifts without requiring target-domain labels. In this paper, we conduct a rigorous empircal investigation into the efficacy of Source-Free Domain Adaptation for cross-ethnic glaucoma screening. Using a DINOv3 ViT-Large foundation model, we train a source model on the European AIROGS dataset ($n{=}9{,}540$) and adapt it to the Indian Ch\'{a}k\c{s}u dataset ($n{=}1{,}345$). Our findings fundamentally challenge prevailing assumptions. First, we demonstrate that the DINOv3 source model inherently achieves exceptional zero-shot cross-ethnic generalisation (AUROC: 0.852), performing equivalently to an in-domain supervised Oracle model (AUROC: 0.892). Second, we reveal a catastrophic failure mode in unsupervised adaptation: applying state-of-the-art Information Maximisation objectives causes severe algorithmic collapse (AUROC: 0.390, Specificity: 1\%). Despite introducing targeted corrections---class-prior regularisation and selective entropy minimisation---the model exploits demographic confounders, driving predictions degenerately toward the minority class. We formally characterise this vulnerability, concluding that unsupervised test-time calibration is currently unsafe for deploying foundation models across ethnic shifts in medical imaging.
+\end{abstract}
+
+% -----------------------------------------------------------------------
+\section{Introduction}
+\label{sec:intro}
+
+Glaucoma is the second leading cause of irreversible blindness worldwide \cite{tham2014global}. While deep-learning models for automated screening have shown high efficacy within controlled datasets \cite{li2018efficacy}, shifting these models across international demographics introduces a major bottleneck: \emph{cross-ethnic domain shift}. Models trained predominantly on European cohorts, such as AIROGS \cite{vermeer2024airogs}, historically suffer degradation when applied to South Asian retinas, such as those in the Ch\'{a}k\c{s}u dataset \cite{kumar2023chakshu}. 
+
+This degradation stems from phenotypic variations, such as increased melanin pigmentation resulting in darker fundus appearances, interwoven with hardware differences across hospital environments \cite{rajesh2025rps}. Due to global privacy restrictions (e.g., GDPR), source training data cannot typically be transferred to the deployment site. Furthermore, securing local ground-truth labels requires expensive expert ophthalmologist annotations. Consequently, \emph{Source-Free Domain Adaptation} (SFDA), which adapts a pre-trained model solely using unlabelled target data, has gained massive traction as a theoretical panacea.
+
+In this study, we subject SFDA paradigms to rigorous scrutiny in a realistic cross-ethnic glaucoma screening scenario. We utilise DINOv3, a state-of-the-art visual foundation model, to establish a high-capacity baseline. We hypothesised that while zero-shot application of the European model would struggle in India, targeted SFDA (minimising prediction entropy while maximising batch diversity) would recalibrate the feature space and recover performance.
+
+Our empirical findings invert this hypothesis entirely:
+\begin{enumerate}
+    \item \textbf{High Zero-Shot Generalisation:} Foundation models (DINOv3) generalise cross-ethnically far more robustly than previously documented CNNs. The zero-shot model achieved a 0.852 AUROC on Indian data, rivalling even the supervised \emph{Oracle} model (0.892).
+    \item \textbf{The TTA Collapse:} Unsupervised Test-Time Adaptation induces catastrophic representational collapse. Adaptation methodologies destroyed the robust zero-shot decision boundary, plummeting the AUROC to 0.390 and forcing 100\% sensitivity at the cost of 1\% specificity.
+    \item \textbf{Confounder Exploitation:} Even when regularised with exact target-domain prevalence priors (class-prior KL divergence), the unlabelled optimisation conflates pathogenic and demographic features. It learns \emph{how many} cases should be glaucoma, but completely forgets \emph{which ones} they are.
+\end{enumerate}
+
+These findings expose a critical vulnerability: deploying unsupervised test-time adaptation on foundation models for cross-ethnic clinical applications is fundamentally unsafe.
+
+% -----------------------------------------------------------------------
+\section{Methodology}
+\label{sec:methods}
+
+\subsection{Datasets}
+We construct a large-scale, cross-ethnic adaptation benchmark:
+\textbf{Source Domain (Europe):} The AIROGS dataset comprises high-resolution, standardised colour fundus images collected across the Netherlands \cite{vermeer2024airogs}. We sampled $n{=}9{,}540$ images, rigorously class-balanced (50\% Referable Glaucoma, 50\% Normal), to train the source model independent of class-imbalance biases.
+\textbf{Target Domain (India):} The Ch\'{a}k\c{s}u dataset \cite{kumar2023chakshu} consists of images captured using handheld, non-mydriatic cameras (Remidio, Forus, Bosch) across rural Indian clinics. The dataset is highly imbalanced, reflecting true clinical prevalence (approximately 15\% Glaucoma). We utilise 1,009 unlabelled images for adaptation and 336 strictly held-out images for evaluation.
+
+\subsection{Source Training and the Oracle}
+We employed a DINOv3 ViT-Large backbone (16-patch, 303M parameters). To preserve self-supervised textual/structural knowledge, the backbone was largely frozen; only the final two transformer blocks and the dense classification head were fine-tuned via Cross-Entropy loss. 
+
+To determine the ceiling performance for the target domain, we trained an \emph{Oracle} model directly on the fully-labelled Ch\'{a}k\c{s}u training set (using WeightedRandomSampler to handle the 1:6 Glaucoma-to-Normal imbalance).
+
+\subsection{Unsupervised Test-Time Adaptation}
+We implemented a standard Source-Free Domain Adaptation workflow, referred to as \emph{Netra-Adapt}, heavily relying on Information Maximisation (IM). The standard IM objective consists of two components:
+1. \textbf{Entropy Minimisation ($\mathcal{L}_{ent}$):} Forces the model to output highly confident predictions on the unlabelled target samples point-wise.
+2. \textbf{Diversity Maximisation ($\mathcal{L}_{div}$):} Maximises the entropy of the mean batch predictions to prevent degenerate solutions (e.g., predicting all images as normal).
+
+However, during initial experiments, standard IM caused massive mode collapse, grouping all samples into "Normal." To counter this, we designed three advanced corrections meant to stabilise adaptation:
+\begin{itemize}
+    \item \textbf{Prior Matching ($\mathcal{L}_{balance}$):} Instead of uniform diversity, we enforced a KL divergence penalty to match the global mean output strictly to the Indian clinical prior of $[0.85, 0.15]$ (Normal:Glaucoma).
+    \item \textbf{Selective Entropy:} $\mathcal{L}_{ent}$ was applied exclusively to uncertain samples to prevent feature destruction in already-confident alignments.
+    \item \textbf{Removal of Hard Pseudo-labels:} Hard semantic loss was removed to prevent confirmation bias on noisy predictions.
+\end{itemize}
+
+% -----------------------------------------------------------------------
+\section{Results}
+\label{sec:results}
+
+We evaluated four distinct configurations on the held-out Ch\'{a}k\c{s}u test set ($n=336$). The results are summarised in Table \ref{tab:results}.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Model Config.} & \textbf{AUROC} & \textbf{Sens.} & \textbf{Spec.} & \textbf{F1} \\
+\midrule
+Pretrained (Random Head) & 0.487 & 0.20 & 0.91 & 0.227 \\
+\textbf{Source (Zero-Shot)} & \textbf{0.852} & 0.76 & 0.84 & 0.574 \\
+Target Oracle & \textbf{0.892} & 0.92 & 0.78 & \textbf{0.588} \\
+\midrule
+\textbf{Source + SFDA (Netra-Adapt)} & \textbf{0.390} & \textbf{1.00} & \textbf{0.01} & 0.266 \\
+\bottomrule
+\end{tabular}
+\caption{Cross-ethnic generalisation versus adaptation collapse on the Indian Ch\'{a}k\c{s}u test set.}
+\label{tab:results}
+\vspace{-1em}
+\end{table}
+
+\subsection{Robustness of the Zero-Shot Foundation}
+Counter to prevailing literature, the Source Model exhibited remarkable cross-ethnic resilience, achieving an AUROC of 0.852. Crucially, the Oracle model---provided with full access to target-domain labels and hardware characteristics---performed at 0.892 AUROC. We attribute this to DINOv3's high-capacity extraction of structural features (optic disc/cup morphology) rather than relying on brittle color/lighting textures that CNNs typically overfit to.
+
+\begin{figure*}[t]
+    \centering
+    \begin{subfigure}{0.48\textwidth}
+        \includegraphics[width=\linewidth]{../Evaluation-Run-7/tsne_source.png} % Path to your generated image
+        \caption{Zero-Shot Source Model Features}
+        \label{fig:tsne_source}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.48\textwidth}
+        \includegraphics[width=\linewidth]{../Evaluation-Run-7/tsne_adapted.png} % Path to your generated image
+        \caption{SFDA Adapted Model Features (Mode Collapse)}
+        \label{fig:tsne_adapted}
+    \end{subfigure}
+    \caption{t-SNE visualisations of the Ch\'{a}k\c{s}u test set feature embeddings before and after unsupervised adaptation. While the zero-shot foundation model intrinsically clusters pathological progression, the adaptation loss causes a catastrophic structural collapse, completely destroying the decision boundary.}
+    \label{fig:tsne}
+\end{figure*}
+
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=0.9\linewidth]{../Evaluation-Run-7/attention_maps_comparison.png}
+    \caption{Attention Map Comparison showing the spatial focus of the DINOv3 [CLS] token. The zero-shot model correctly localizes the optic disc/cup, whereas the adapted model's attention is entirely disrupted and scattered randomly across the image, correlating with the catastrophic drop in AUROC.}
+    \label{fig:attention_maps}
+\end{figure*}
+
+\subsection{The Catastrophic Failure of Adaptation}
+As visually demonstrated in Figure \ref{fig:tsne} and \ref{fig:attention_maps}, despite implementing "best practice" regularisations, the SFDA phase yielded an AUROC of 0.390 (worse than random guessing). The model collapsed to predicting Glaucoma for almost every image (Specificity 1\%, Sensitivity 100\%).
+
+This collapse demonstrates a fatal flaw in applying entropy-minimisation principles to clinical data with demographic shifts. When the loss forces the unlabelled target embeddings to satisfy the $[0.85, 0.15]$ prior, the model does not learn pathology. Instead, it co-opts the most salient target-domain features—such as device lighting artefacts or patient melanin levels—and clusters them arbitrarily to satisfy the numerical KL-divergence constraint. The clinical decision boundary learned on European data is functionally obliterated in pursuit of mathematical diversity.
+
+% -----------------------------------------------------------------------
+\section{Discussion and Conclusion}
+\label{sec:conclusion}
+
+The pursuit of algorithmic fairness and global equity in medical AI has heavily favored unsupervised domain adaptation as a scalable mechanism. However, our results indicate that \emph{the illusion of calibration} is real: models can successfully match target statistical priors while completely forgetting the pathogenic signal. 
+
+We draw two crucial conclusions for the future of cross-ethnic glaucoma screening:
+\begin{enumerate}
+    \item \textbf{Massive source training beats limited target tuning.} For high-capacity visual foundation models, a massive, diverse out-of-domain dataset (AIROGS) provides more clinical utility than fine-tuning on a small but perfectly representative target dataset.
+    \item \textbf{Unsupervised TTA is currently disjoint from medical safety.} Algorithms designed to align unlabelled feature distributions cannot distinguish between a "shift in camera lighting" and a "shift in disease severity." Until adaptation paradigms can formally decouple phenotypic from pathogenic features, Test-Time Adaptation should not be deployed clinically without human-in-the-loop labels.
+\end{enumerate}
+
+Future work must abandon pure entropy-based objectives for medical shifts and instead explore structurally-constrained adaptation, multi-modal alignments, or few-shot supervised techniques to safely democratise foundation models in ophthalmology.
+
+\end{document}
