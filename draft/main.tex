@@ -1115,7 +1115,7 @@ Table~\ref{tab:main}.
 }
 \end{table}
 
-\section{RAG Baseline Configuration}
+\section{RAG Baseline: Full Results}
 \label{app:rag}%
 
 The retrieval-augmented baseline indexes DINOv3 \texttt{[CLS]}-token
@@ -1128,5 +1128,85 @@ best configuration ($k = 5$, majority vote) achieves $0.509$
 \auroc{}; \auroc{} across the full grid spans $0.457$--$0.509$,
 confirming that the failure of nearest-neighbour transfer is not
 sensitive to $k$ or aggregation choice.
+
+Table~\ref{tab:rag_full} reports all 12 configurations.
+Figure~\ref{fig:rag_heatmap} shows the AUROC and sensitivity--specificity
+landscape as a heatmap. Figure~\ref{fig:rag_best} shows the ROC curve and
+confusion matrix for the best configuration ($k{=}5$, majority vote).
+
+\begin{table}[ht]
+\centering
+\small
+\caption{Full RAG grid-search results on the \tgt{} test set
+         (233 normal, 69 glaucoma). AUROC, sensitivity (Se), and
+         specificity (Sp) are reported for all 12 configurations.
+         All AUROC values are near 0.5, confirming retrieval-based
+         transfer fails regardless of hyperparameter choice.}
+\label{tab:rag_full}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{llcccc}
+\toprule
+$k$ & Aggregation & \auroc{} & Se & Sp & F1 \\
+\midrule
+ 5 & Majority vote    & 0.509 & 0.246 & 0.738 & 0.231 \\
+ 5 & Weighted vote    & 0.505 & 0.246 & 0.738 & 0.231 \\
+ 5 & Mean prob.       & 0.509 & 0.246 & 0.738 & 0.231 \\
+10 & Majority vote    & 0.501 & 0.304 & 0.674 & 0.253 \\
+10 & Weighted vote    & 0.501 & 0.246 & 0.755 & 0.238 \\
+10 & Mean prob.       & 0.501 & 0.304 & 0.674 & 0.253 \\
+20 & Majority vote    & 0.462 & 0.275 & 0.747 & 0.259 \\
+20 & Weighted vote    & 0.465 & 0.232 & 0.794 & 0.241 \\
+20 & Mean prob.       & 0.462 & 0.275 & 0.747 & 0.259 \\
+50 & Majority vote    & 0.458 & 0.217 & 0.773 & 0.219 \\
+50 & Weighted vote    & 0.458 & 0.203 & 0.803 & 0.217 \\
+50 & Mean prob.       & 0.458 & 0.217 & 0.773 & 0.219 \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\begin{figure}[ht]
+  \centering
+  \begin{subfigure}[t]{0.48\columnwidth}
+    \centering
+    \includegraphics[width=\linewidth]{rag_results/auroc_heatmap.pdf}
+    \caption{AUROC across the $k \times$ method grid.
+             All values cluster near 0.5 (random chance),
+             demonstrating insensitivity to hyperparameters.}
+  \end{subfigure}\hfill
+  \begin{subfigure}[t]{0.48\columnwidth}
+    \centering
+    \includegraphics[width=\linewidth]{rag_results/sensitivity_specificity.pdf}
+    \caption{Sensitivity--specificity trade-off across configurations.
+             Larger $k$ inflates specificity at the cost of sensitivity;
+             no configuration achieves both above 0.5.}
+  \end{subfigure}
+  \caption{RAG grid-search landscape. The heatmap and trade-off plot
+           confirm that the retrieval approach does not have a useful
+           operating regime in this cross-ethnic setting.}
+  \label{fig:rag_heatmap}
+\end{figure}
+
+\begin{figure}[ht]
+  \centering
+  \begin{subfigure}[t]{0.48\columnwidth}
+    \centering
+    \includegraphics[width=\linewidth]{rag_results/k5_majority_vote/roc_curve.pdf}
+    \caption{ROC curve for the best RAG configuration ($k{=}5$, majority
+             vote). The curve hugs the diagonal, confirming performance
+             indistinguishable from a random classifier.}
+  \end{subfigure}\hfill
+  \begin{subfigure}[t]{0.48\columnwidth}
+    \centering
+    \includegraphics[width=\linewidth]{rag_results/k5_majority_vote/confusion_matrix.pdf}
+    \caption{Confusion matrix. The system correctly identifies normals
+             (TN\,=\,172) but misses 75\% of glaucoma cases
+             (FN\,=\,52 out of 69), making it clinically unusable.}
+  \end{subfigure}
+  \caption{Best-configuration RAG results ($k{=}5$, majority vote,
+           AUROC\,$= 0.509$). Even the best configuration misses
+           three in four glaucoma patients.}
+  \label{fig:rag_best}
+\end{figure}
 
 \end{document}
