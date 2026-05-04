@@ -831,97 +831,36 @@ it are, in their current form, not worth the risk.
 \section{Limitations and Future Work}
 \label{sec:futurelimitations}%
 
-\subsection{Limitations}
-
-\paragraph{Single source--target pair.}
-Our study uses a single source dataset (\src{}) and a single target
-dataset (\tgt{}), chosen because they are the largest publicly
-available labelled fundus benchmarks for European and Indian
-populations respectively. Whether the same inversion---strong
-zero-shot transfer, catastrophic SFDA collapse---holds for other
-source-target pairings (e.g., AIROGS$\to$African cohorts,
-EyePACS$\to$East Asian cohorts) requires further empirical study. The
-narrower the population represented in the source dataset, the more
-likely the failure premise actually holds and the more useful
-adaptation may become; our finding should not be over-generalised
-beyond the AIROGS$\to$\tgt{} setting we tested.
+\paragraph{Scope of the finding.}
+Our study uses a single source--target pair (\src{}$\to$\tgt{}); whether
+the same inversion holds for other pairings (e.g., AIROGS$\to$African or
+East Asian cohorts) requires further study. Where the source distribution
+is narrower or the cross-ethnic gap is larger, the failure premise may
+actually hold and adaptation may be more useful. Results should not be
+generalised beyond the setting tested.
 
 \paragraph{Single SFDA family.}
-Our SFDA condition uses the SHOT~\cite{liang2020} information-maximisation
-objective with prevalence matching, the canonical recipe in this
-literature. Other SFDA/TTA families exist---batch-norm-only updates
-(TENT~\cite{wang2021tent}), sample selection
-(EATA~\cite{niu2022eata}), stability-aware updates
-(SAR~\cite{niu2023sar}), and frequency-domain decoupling for medical
-imaging (AIF-SFDA~\cite{li2025aif}). We expect these to fail less
-catastrophically than naive SHOT (their published results on other
-domains support this), but the fundamental issue we identify---the
-SFDA objective is satisfiable by camera-style confounders---is a
-property of the unlabelled-target objective itself, not specific to
-SHOT.
+We test the canonical SHOT information-maximisation objective; other
+families (TENT~\cite{wang2021tent}, EATA~\cite{niu2022eata},
+SAR~\cite{niu2023sar}, AIF-SFDA~\cite{li2025aif}) may fail less
+catastrophically, but the core issue---that the unlabelled-target
+objective is satisfiable by camera-style confounders---is not specific
+to SHOT.
 
-\paragraph{Statistical precision on a small positive class.}
-The \tgt{} test split contains only $51$ glaucoma cases out of $336$
-images. With this denominator, $95\%$ bootstrap confidence intervals
-on \auroc{} are wide (roughly $\pm 0.04$ at our point estimates), and
-all reported numbers should be read as point estimates rather than
-tightly bounded measurements. Our central qualitative claims are
-robust to this uncertainty---the gap between $0.852$ zero-shot and
-$0.390$ adapted \auroc{} is far larger than any plausible CI---but
-fine numerical comparisons (e.g., the $0.040$ gap between zero-shot
-and oracle) should be interpreted with care.
+\paragraph{Mechanistic evidence and replication.}
+Our t-SNE and attention analyses are visual and qualitative; controlled
+counterfactual studies (e.g., camera-artefact ablation) would provide
+causal evidence. Each condition is run once; SHOT-IM collapse magnitude
+may vary across seeds and batch orderings.
 
-\paragraph{Single training run per condition.}
-Each condition is trained once with the configuration logged in the
-provided artifacts; we do not report seed-level variability. SHOT-IM
-adaptation, in particular, is known to be sensitive to initialisation
-and batch composition, and its collapse magnitude may vary across
-seeds. Replication across multiple seeds is an important next step.
-
-\paragraph{Mechanistic evidence is qualitative.}
-Our t-SNE and attention analyses provide visual support for the
-camera-style-confounder mechanism but do not rule out alternative
-explanations causally. A controlled counterfactual study---e.g.,
-matched-image synthesis with and without camera-specific artefacts,
-or explicit camera-domain probing---would provide stronger evidence.
-
-\subsection{Future Work}
-
-\paragraph{When (if ever) is unsupervised adaptation safe here?}
-The most interesting question raised by our results is not
-\emph{how} to fix SFDA, but \emph{whether} there is a regime in
-which unsupervised adaptation reliably helps modern self-supervised
-backbones on cross-ethnic medical screening. Characterising that
-regime---in terms of source-target gap, label-prior shift, and
-backbone capacity---would meaningfully shape deployment guidance.
-
-\paragraph{Few-shot adaptation as the practical alternative.}
-A small labelled target set ($5$--$50$ images per class), feasible
-for a local ophthalmologist to annotate, may be a far safer route
-than fully unsupervised adaptation. Few-shot fine-tuning anchors the
-decision boundary to actual labels and structurally cannot be
-satisfied by a constant predictor.
-
-\paragraph{Retinal Pigment Score as a covariate.}
-Rajesh et al.\ \shortcite{rajesh2025} show that the Retinal Pigment
-Score (RPS) can be computed directly from fundus images. Stratifying
-zero-shot performance by RPS---rather than by self-reported
-ethnicity---would provide a more biologically grounded measurement of
-the cross-ethnic transfer behaviour we observe.
-
-\paragraph{Multi-class staging and continual deployment.}
-Extending the same investigation to multi-class glaucoma staging
-(healthy/early/moderate/severe) and to continual streaming
-deployment, where new camera models are introduced over time, would
-test whether the illusion-of-calibration failure mode generalises
-beyond the binary referable/non-referable case.
-
-\paragraph{Prospective clinical validation.}
-Our results are retrospective. A prospective deployment study in an
-Indian primary-care setting---with real-time acquisition, variable
-operator skill, and clinical workflow integration---is the necessary
-next step before any cross-ethnic glaucoma screening system,
-adapted or not, is considered for real-world deployment.
+\paragraph{Directions forward.}
+The most practically valuable follow-up is few-shot adaptation: even
+$5$--$50$ labelled target images per class would anchor the decision
+boundary to actual pathology and structurally prevent a constant-predictor
+collapse. Stratifying zero-shot performance by the Retinal Pigment
+Score~\cite{rajesh2025} rather than by self-reported ethnicity would
+provide a more biologically grounded characterisation of the transfer
+behaviour we observe.
 
 % ===========================================================
 %  ACKNOWLEDGMENTS
