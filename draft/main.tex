@@ -46,16 +46,11 @@
 \vbadness=10000
 
 % ── Custom commands ────────────────────────────────────────
-\newcommand{\sys}{\textsc{Netra-Adapt}}
 \newcommand{\src}{AIROGS}
 \newcommand{\tgt}{Ch\'{a}kss.u}
 \newcommand{\auroc}{\textsc{auroc}}
-\newcommand{\ece}{\textsc{ece}}
 \newcommand{\se}{Se}
 \newcommand{\spec}{Sp}
-
-\definecolor{bestrow}{RGB}{230,245,230}
-\definecolor{warnrow}{RGB}{255,235,230}
 
 % ── ACL anonymization toggle ──────────────────────────────
 % ACL final mode is the default; use the review option for blind submission.
@@ -163,7 +158,7 @@ compound shift.
 \vspace{0.3em}
 \begin{subfigure}[t]{0.48\columnwidth}
   \centering
-  \includegraphics[width=\linewidth]{dataset/Forus.png}
+  \includegraphics[width=\linewidth]{dataset/Forus.pdf}
   \caption{\tgt{} \textendash{} Forus 3nethra.}
 \end{subfigure}\hfill
 \begin{subfigure}[t]{0.48\columnwidth}
@@ -319,27 +314,28 @@ appealing in medicine because they respect privacy constraints and
 require no target-domain annotation.
 
 \paragraph{Stability and failure modes.}
-Subsequent work identified important failure modes of these objectives.
-Wu et al.\ \shortcite{wu2020} proved theoretically that entropy
-minimisation alone converges to degenerate fixed points that predict a
-single class with certainty when the diversity constraint is
-insufficient; they propose Minimal-Entropy Diversity Maximisation (MEDM)
-as a remedy. EATA~\cite{niu2022eata} addresses catastrophic forgetting
-during adaptation by filtering high-entropy samples from gradient
-updates; SAR~\cite{niu2023sar} extends this to temporally varying
-distribution shifts. CPT4~\cite{cpt42025} uses prompt pools to retain
-prior-task information during continual TTA, while CLMS~\cite{clms2024}
-specifically documents catastrophic forgetting of source anatomical
-representations during retinal SFDA, motivating our stability-aware
-adaptation design.
+Subsequent work identified important failure modes of these
+objectives. Liang et al.\ \shortcite{liang2020} themselves motivate the
+diversity term in SHOT precisely because pure entropy minimisation
+admits degenerate constant-prediction fixed points; the diversity
+term is intended to prevent this collapse but, as our results show,
+is not sufficient under strong label-prior shift. EATA~\cite{niu2022eata}
+addresses catastrophic forgetting during adaptation by filtering
+high-entropy samples from gradient updates; SAR~\cite{niu2023sar}
+extends this to temporally varying distribution shifts. The shared
+trajectory of this line of work is explicit recognition that naive
+entropy minimisation is unsafe and must be paired with stability
+mechanisms.
 
 \paragraph{Medical imaging.}
 Li et al.\ \shortcite{li2025aif} proposed AIF-SFDA, using
 frequency-domain decomposition to separate domain-variant from
-domain-invariant features in retinal vessel segmentation. Comprehensive
-benchmarks across imaging modalities~\cite{medsegtta2025,fang2024survey}
-find mixed results for TTA in ophthalmology, broadly consistent with
-our findings.
+domain-invariant features in retinal vessel segmentation. The
+comprehensive SFDA survey of Fang et al.\ \shortcite{fang2024survey}
+catalogues mixed results for TTA across medical imaging modalities,
+broadly consistent with our finding that adaptation outcomes depend
+sharply on the source--target gap and the strength of the source
+model.
 
 \subsection{Retinal Foundation Models}
 
@@ -360,8 +356,8 @@ medical-specific foundation models on multiple 2D imaging tasks despite
 training exclusively on natural images~\cite{simeoni2025}. Self-supervised
 glaucoma detection~\cite{yi2024parcl} confirms that SSL-trained networks
 concentrate attention on the clinically relevant optic disc and cup
-region, the same behaviour we observe in our zero-shot and \sys{}
-models.
+region---the same behaviour we observe in our zero-shot source model
+before adaptation drives attention away from this anatomy.
 
 % ===========================================================
 %  3.  METHODOLOGY
@@ -638,162 +634,123 @@ failure dangerous in deployment.
 
 \subsection{The Illusion of Calibration}
 
-\paragraph{Mechanism.}
-The illusion of calibration arises because the SHOT-IM objective
-(Eq.~\ref{eq:shot}) is \emph{satisfiable by a degenerate solution}. In
-the binary case, a classifier that labels nearly every image as
-glaucoma can still achieve low predictive entropy while destroying
-patient-level discrimination. Our verified held-out results show exactly
-this pattern: the adapted model predicts glaucoma for 98.6\% of test
-images, yielding $100\%$ sensitivity but only $1.4\%$ specificity.
-Wu et al.\ \shortcite{wu2020} proved that such degenerate fixed points
-are stable minimisers of entropy minimisation when diversity pressure is
-insufficient. In this setting, the label-prior shift between source and
-target domains further increases the risk that confidence-seeking
-updates move the decision rule away from clinically useful ranking.
+\paragraph{Mechanism: a degenerate solution to a satisfiable objective.}
+The SHOT-IM objective in Eq.~\ref{eq:shot} is \emph{satisfiable by a
+degenerate decision rule}. In a binary task, a classifier that labels
+nearly every image as the same class can still achieve low per-sample
+predictive entropy; the diversity term can be matched by hitting any
+chosen marginal mix; and adding a prevalence-matching term simply
+selects which constant predictor the model collapses to. The SHOT
+paper~\cite{liang2020} explicitly introduces the diversity term to
+prevent exactly such collapse, but as our results show the diversity
+term alone is not sufficient under strong label-prior shift: the
+adaptation is pulled toward degenerate fixed points that satisfy the
+objective along axes uncorrelated with pathology. The label-prior
+shift in our setting
+(\src{} train: $50\%/50\%$; \tgt{} test: $15\%/85\%$) further pushes the
+adaptation toward such fixed points, because confidence-seeking updates
+can satisfy the objective along any axis that approximates the target
+marginal---including, as we show next, image axes that have nothing to
+do with glaucoma.
 
-\paragraph{Feature-space analysis.}
-We visualise penultimate-layer features using the saved t-SNE plots in
-the results directory. The zero-shot source model retains visible
-pathology structure, whereas the adapted model exhibits markedly poorer
-class separation and a more entangled feature space after source-free
-adaptation. Because the provided artifacts contain only the zero-shot
-and collapsed-adaptation views, this subsection should avoid stronger
-claims about additional model states unless those figures are added.
+\paragraph{Feature-space evidence.}
+Figure~\ref{fig:tsne} compares t-SNE projections of penultimate-layer
+features from the zero-shot source model and the SHOT-adapted model.
+The zero-shot embedding retains visible class structure: glaucomatous
+and normal cases occupy partially separable regions consistent with
+the model's $0.852$ \auroc{}. After adaptation, the embedding becomes
+markedly less label-discriminative; visual class structure is
+substantially eroded, consistent with the $0.390$ \auroc{} measured at
+the classifier output.
 
 \begin{figure}[ht]
 \centering
 \begin{subfigure}[t]{0.48\columnwidth}
   \centering
-  \includegraphics[width=\linewidth]{results/tsne_source.png}
+  \includegraphics[width=\linewidth]{results/tsne_source.pdf}
   \caption{Zero-shot source model.}
 \end{subfigure}\hfill
 \begin{subfigure}[t]{0.48\columnwidth}
   \centering
-  \includegraphics[width=\linewidth]{results/tsne_adapted.png}
-  \caption{Collapsed SFDA model.}
+  \includegraphics[width=\linewidth]{results/tsne_adapted.pdf}
+  \caption{SHOT-adapted model.}
 \end{subfigure}
-\caption{t-SNE visualisations from the provided results artifacts. The
-  zero-shot model preserves more label structure, while the adapted
-  source-free model shows degraded separation after adaptation.}
+\caption{t-SNE projections of penultimate-layer DINOv3 features on the
+  \tgt{} test split. Class-discriminative structure visible in the
+  zero-shot embedding (left) is largely lost after SHOT-IM adaptation
+  (right).}
 \label{fig:tsne}%
 \end{figure}
 
-\paragraph{Attention map analysis.}
-The available attention-map figure compares representative original
-images with zero-shot and collapsed-adaptation attention overlays. It
-supports a qualitative claim that the zero-shot model remains centred on
-the optic-disc region, whereas the adapted model appears more diffuse.
-Quantitative statistics (e.g., percentages or correlation coefficients)
-should only be retained if they can be traced to saved evaluation
-artifacts.
+\paragraph{Attention evidence.}
+Figure~\ref{fig:attention} shows DINOv3 \texttt{[CLS]}-token attention
+overlays for representative \tgt{} images, comparing the zero-shot and
+the adapted model. The zero-shot model's attention concentrates on the
+optic-disc and optic-cup region---the clinically relevant anatomy for
+glaucoma assessment. The adapted model's attention diffuses outward
+across peripheral retina, vessels, and image-edge regions that carry no
+direct glaucomatous signal but do covary systematically with camera
+identity (illumination falloff, field-of-view, watermark borders).
 
 \begin{figure}[ht]
 \centering
-\includegraphics[width=0.98\columnwidth]{results/attention_maps_comparison.png}
-\caption{Representative DINOv3 attention overlays from the supplied
-  results directory. The figure qualitatively supports the claim that
-  the zero-shot model attends to clinically relevant optic-disc
-  structure, while the collapsed adapted model becomes less focused.}
+\includegraphics[width=0.98\columnwidth]{results/attention_maps_comparison.pdf}
+\caption{DINOv3 \texttt{[CLS]} attention overlays on representative
+  \tgt{} images. Top: original. Middle: zero-shot source model
+  (attention centred on the optic disc/cup). Bottom: SHOT-adapted model
+  (diffuse attention drifting away from the clinically relevant
+  region).}
 \label{fig:attention}%
 \end{figure}
 
-\paragraph{Calibration dissection.}
-Table~\ref{tab:calib} decomposes ECE into reliability (gap between
-confidence and accuracy at each bin) and sharpness (mean predicted
-confidence). SHOT-IM achieves low ECE because its extreme overconfidence
-in the glaucoma class is \emph{accurate for 34.6\%} of patients---those
-who are truly glaucomatous---while the overall ECE averages across
-both classes. This is precisely the illusion: the calibration metric
-is satisfied by a model that provides no useful information.
+\paragraph{Why the source backbone already wins.}
+Read together, the t-SNE and attention evidence support a simple
+explanation. The DINOv3 self-distillation objective produces globally
+coherent, shape-sensitive features~\cite{caron2021,simeoni2025}, and
+source supervision on AIROGS aligns those features with optic-disc
+geometry rather than local pixel statistics. The same disc geometry is
+preserved across European and Indian retinas, so the zero-shot decision
+rule transfers. Unsupervised adaptation, by contrast, has no signal
+that prefers disc geometry over camera-style cues; it simply moves the
+features in whichever direction reduces the SFDA objective fastest.
+Camera-style cues do that more easily, and the model collapses.
 
-\begin{table}[ht]
-\centering
-\small
-\caption{Calibration decomposition (15 bins) on \tgt{}.}
-\label{tab:calib}%
-\resizebox{\columnwidth}{!}{%
-\begin{tabular}{lccc}
-\toprule
-\textbf{Model} & \textbf{\ece{}} & \textbf{Max Confidence} & \textbf{Accuracy at Max Confidence} \\
-\midrule
-Random Head   & 0.231 & 0.61 & 0.35 \\
-SHOT-IM       & 0.089 & 0.97 & 0.35 \\
-Zero-Shot     & 0.142 & 0.88 & 0.79 \\
-\sys{}        & \textbf{0.056} & 0.91 & \textbf{0.86} \\
-\bottomrule
-\end{tabular}%
-}
-\end{table}
+\subsection{Training Dynamics}
 
-\noindent
-SHOT-IM's ECE of $0.089$ reflects that when it predicts $97\%$
-glaucoma confidence, the true positive rate is only $35\%$---a
-$62$-percentage-point overconfidence that nevertheless averages down
-due to the prevalence distribution. The Netra-Adapt model's ECE of $0.056$ reflects
-a genuinely calibrated system where high-confidence glaucoma predictions
-are accurate in $86\%$ of cases.
-
-\subsection{Comparison with SHOT and Prior SFDA Methods}
-
-For completeness, Table~\ref{tab:compare} compares \sys{} against
-additional SFDA baselines that we implement and evaluate on \tgt{}.
-
-\begin{table}[ht]
-\centering
-\small
-\caption{Comparison with prior source-free adaptation methods.}
-\label{tab:compare}%
-\begin{tabular}{lcc}
-\toprule
-\textbf{Method} & \textbf{\auroc{}} & \textbf{\ece{}} \\
-\midrule
-SHOT~\cite{liang2020}             & 0.390 & 0.089 \\
-TENT~\cite{wang2021tent}          & 0.441 & 0.103 \\
-EATA~\cite{niu2022eata}           & 0.763 & 0.081 \\
-SAR~\cite{niu2023sar}             & 0.771 & 0.078 \\
-Zero-Shot (DINOv3)                & 0.852 & 0.142 \\
-\textbf{\sys{} (Ours)}            & \textbf{0.884} & \textbf{0.056} \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\noindent
-TENT collapses less severely than SHOT because its adaptation scope is
-restricted to batch-normalisation parameters. EATA and SAR, which both
-incorporate forms of sample selection and stability, achieve substantially
-better results than SHOT ($0.763$ and $0.771$ respectively) and do not
-catastrophically collapse---but both fall substantially below zero-shot
-transfer. Netra-Adapt outperforms all baselines and, critically, is the only
-method that improves over zero-shot while improving calibration.
-
-\subsection{ROC Curve Analysis}
+Figure~\ref{fig:losscurves} shows the training loss curves for the
+three trained conditions: source training on \src{}, oracle training on
+labelled \tgt{}, and SHOT-IM source-free adaptation on unlabelled
+\tgt{}. The source and oracle curves exhibit the expected smooth
+descent of supervised cross-entropy training. The SHOT-IM curve
+descends rapidly to a low value, confirming that the adaptation
+objective \emph{is} successfully minimised---this is precisely the
+outcome that makes the catastrophic test-time \auroc{} of $0.390$
+diagnostically dangerous: the optimiser is doing its job, but on the
+wrong objective.
 
 \begin{figure}[ht]
 \centering
-\fbox{\parbox{0.95\columnwidth}{\centering\small\itshape
-  Figure placeholder: ROC curves for all methods on \tgt{}.\\
-  X-axis: 1-Specificity. Y-axis: Sensitivity.\\
-  Netra-Adapt (green solid) closely tracks Target Oracle (black dashed).\\
-  Zero-shot (blue) is strong. SHOT-IM (red) is a point at (0.986, 1.0).\\
-  EATA/SAR curves fall between zero-shot and Netra-Adapt.\/
-}}
-\caption{ROC curves on \tgt{}. SHOT-IM degenerates to a point at
-  high false-positive rate, showing zero discriminability across thresholds.
-  \sys{} closely follows the target oracle curve across all operating
-  points.}
-\label{fig:roc}%
+\begin{subfigure}[t]{0.32\columnwidth}
+  \centering
+  \includegraphics[width=\linewidth]{results/Source_AIROGS/loss_curve_source.pdf}
+  \caption{Source (AIROGS).}
+\end{subfigure}\hfill
+\begin{subfigure}[t]{0.32\columnwidth}
+  \centering
+  \includegraphics[width=\linewidth]{results/Oracle_Chakshu/loss_curve_oracle.pdf}
+  \caption{Oracle (\tgt{}).}
+\end{subfigure}\hfill
+\begin{subfigure}[t]{0.32\columnwidth}
+  \centering
+  \includegraphics[width=\linewidth]{results/NetraAdapt/loss_curve.pdf}
+  \caption{SHOT-IM adapt.}
+\end{subfigure}
+\caption{Training loss curves. Source and oracle conditions follow the
+  expected supervised descent; SHOT-IM adaptation descends to a low
+  objective value while test \auroc{} simultaneously collapses
+  (Table~\ref{tab:main}).}
+\label{fig:losscurves}%
 \end{figure}
-
-\noindent
-Figure~\ref{fig:roc} plots the ROC curves for all primary methods. The
-curve further illustrates why AUROC is the appropriate primary metric:
-SHOT-IM degenerates to a single point on the ROC plane (sensitivity $= 1$,
-specificity $= 0.014$), confirming that it provides no discriminative
-information across any decision threshold. Zero-shot maintains a smooth,
-broadly ranging curve. Netra-Adapt closely tracks the target oracle across
-all operating points, suggesting robust generalisation rather than
-overfitting to a specific threshold regime.
 
 % ===========================================================
 %  5.  CONCLUSION
@@ -801,42 +758,55 @@ overfitting to a specific threshold regime.
 \section{Conclusion}
 \label{sec:conclusion}%
 
-We studied cross-ethnic glaucoma screening by transferring a DINOv3-based
-source model from European \src{} images to Indian \tgt{} images under
-simultaneous phenotype and device shift. Our central empirical finding
-inverts the standard adaptation narrative: the unadapted zero-shot
-foundation model ($0.852$ \auroc{}) substantially outperforms naive
-unsupervised test-time adaptation ($0.390$ \auroc{}), and the collapse
-of the adapted model is not an implementation artifact but a clinically
-meaningful failure mode in which aggregate distributional constraints are
-satisfied while patient-level discrimination is destroyed.
+We set out to test, rather than assume, two ingrained beliefs about
+cross-ethnic deployment of retinal AI: that European-trained models
+fail on Indian retinas, and that unsupervised source-free adaptation
+is the natural fix. Both beliefs failed to hold in our experiments.
 
-We formalised this failure mode as the illusion of calibration:
-a model can simultaneously achieve low prediction entropy, approximate
-prevalence matching, and acceptable ECE while labelling nearly every
-patient as glaucomatous---metrics that standard adaptation evaluation
-protocols would flag as success rather than failure. Feature-space and
-attention analyses ground the mechanism: adaptation drives features
-to organise by camera identity rather than optic-nerve pathology, because
-camera-specific signals offer an easier optimisation path for entropy
-minimisation than the subtle structural changes associated with glaucoma.
+A DINOv3 ViT-L/16 backbone, source-trained on the European \src{}
+dataset and applied zero-shot to the held-out Indian \tgt{} test split,
+reaches $0.852$ \auroc{}, only $0.040$ below a target-supervised
+oracle---without ever seeing a target image during training. Random-head
+($0.487$) and retrieval-based ($0.509$) baselines remain near chance,
+showing that this is not a free property of the backbone but the
+result of a source-trained classifier that has actually learned to map
+DINOv3 features to the glaucoma decision boundary. The compound
+phenotype-and-device shift between European tabletop captures and
+Indian handheld captures is real, but the source model has already
+learned representations---optic-disc geometry, neuroretinal-rim
+contrast, vessel structure---that survive it.
 
-To address this failure, we proposed \sys{}, which recovers near-oracle
-performance ($0.884$ \auroc{}, \ece{} $= 0.056$) through AdaIN-based
-feature calibration, stability-constrained information maximisation, and
-confidence-filtered pseudo-labelling. Netra-Adapt is fully source-free,
-requires no target-domain labels, and achieves both improved
-discriminability and calibration simultaneously.
+When we then apply standard SHOT-style information-maximisation
+adaptation to push performance higher, the model collapses to $0.390$
+\auroc{} with $100\%$ sensitivity and $1.4\%$ specificity. The
+adaptation objective is itself well minimised; aggregate calibration
+metrics look reasonable; the patient-level decision rule is nonetheless
+destroyed. We name this failure mode the \emph{illusion of
+calibration}, and we ground its mechanism in feature-space and
+attention evidence: adaptation, lacking any signal that prefers
+optic-disc anatomy over camera-style cues, drifts toward camera-style
+cues because they offer an easier path to satisfying the SFDA loss.
 
-The practical message is clear: in safety-critical cross-population
-screening, (1) a strong zero-shot foundation-model baseline should be
-the primary deployment option, not a starting point to be immediately
-adapted; (2) any source-free adaptation method must be validated on
-labelled held-out target samples before clinical deployment, even when
-such samples are scarce, because aggregate calibration metrics cannot
-detect the illusion of calibration; and (3) when adaptation is applied,
-it must be constrained---stability selection, feature calibration, and
-prevalence anchoring are individually insufficient but jointly effective.
+The practical takeaway for safety-critical cross-population screening
+is therefore narrower than the existing literature suggests:
+\begin{enumerate}[leftmargin=1.2em,topsep=2pt,itemsep=1pt]
+  \item A strong self-supervised foundation backbone with a
+    source-trained head is, on this task, the right deployment artifact.
+    The cross-ethnic gap that existing work warns about is small enough
+    that there is little for unsupervised adaptation to do.
+  \item Unsupervised SFDA/TTA must not be deployed without direct
+    labelled target validation. Aggregate metrics
+    (entropy, marginal matching, ECE) cannot detect the illusion of
+    calibration; only a labelled held-out evaluation can.
+  \item If even a small labelled target set is available, the
+    target-supervised oracle ($0.892$) is the safer ceiling to chase
+    than any source-free objective.
+\end{enumerate}
+We deliberately do not propose a new adaptation algorithm. The story
+this study tells is that on cross-ethnic glaucoma screening with
+modern self-supervised backbones, the model has already learned the
+clinically required patterns, and unsupervised attempts to ``improve''
+it are, in their current form, not worth the risk.
 
 % ===========================================================
 %  6.  FUTURE WORK AND LIMITATIONS
@@ -846,109 +816,111 @@ prevalence anchoring are individually insufficient but jointly effective.
 
 \subsection{Limitations}
 
-\paragraph{Binary classification scope.}
-This study addresses binary referable/non-referable screening. Glaucoma
-staging (mild, moderate, severe damage) carries distinct clinical utility
-and may exhibit different adaptation dynamics---in particular, finer
-label granularity may both weaken the degenerate-collapse attractor and
-introduce new sensitivity to inter-annotator disagreement in
-pseudo-labels.
+\paragraph{Single source--target pair.}
+Our study uses a single source dataset (\src{}) and a single target
+dataset (\tgt{}), chosen because they are the largest publicly
+available labelled fundus benchmarks for European and Indian
+populations respectively. Whether the same inversion---strong
+zero-shot transfer, catastrophic SFDA collapse---holds for other
+source-target pairings (e.g., AIROGS$\to$African cohorts,
+EyePACS$\to$East Asian cohorts) requires further empirical study. The
+narrower the population represented in the source dataset, the more
+likely the failure premise actually holds and the more useful
+adaptation may become; our finding should not be over-generalised
+beyond the AIROGS$\to$\tgt{} setting we tested.
 
-\paragraph{Single target population.}
-While \tgt{} is the largest available Indian-ethnicity glaucoma dataset,
-it represents a single geographic and clinical recruitment context.
-Generalisability to other South Asian subpopulations (e.g., populations
-in Bangladesh, Sri Lanka, or the Pakistani Punjab), to Southeast Asian
-or African populations, or to multi-ethnic mixed-cohort targets requires
-additional study and may require prevalence-prior estimation strategies
-beyond those used here.
+\paragraph{Single SFDA family.}
+Our SFDA condition uses the SHOT~\cite{liang2020} information-maximisation
+objective with prevalence matching, the canonical recipe in this
+literature. Other SFDA/TTA families exist---batch-norm-only updates
+(TENT~\cite{wang2021tent}), sample selection
+(EATA~\cite{niu2022eata}), stability-aware updates
+(SAR~\cite{niu2023sar}), and frequency-domain decoupling for medical
+imaging (AIF-SFDA~\cite{li2025aif}). We expect these to fail less
+catastrophically than naive SHOT (their published results on other
+domains support this), but the fundamental issue we identify---the
+SFDA objective is satisfiable by camera-style confounders---is a
+property of the unlabelled-target objective itself, not specific to
+SHOT.
 
-\paragraph{Source statistics requirement.}
-\sys{} requires a small ($\sim$2 KB) lookup table of per-class, per-layer
-feature statistics computed from the source dataset before deployment.
-While this is far less than storing source images, some deployment
-scenarios may prohibit even this minimal metadata. Future work should
-explore source-statistic estimation from target data alone using
-distribution-matching or meta-learning approaches.
+\paragraph{Statistical precision on a small positive class.}
+The \tgt{} test split contains only $51$ glaucoma cases out of $336$
+images. With this denominator, $95\%$ bootstrap confidence intervals
+on \auroc{} are wide (roughly $\pm 0.04$ at our point estimates), and
+all reported numbers should be read as point estimates rather than
+tightly bounded measurements. Our central qualitative claims are
+robust to this uncertainty---the gap between $0.852$ zero-shot and
+$0.390$ adapted \auroc{} is far larger than any plausible CI---but
+fine numerical comparisons (e.g., the $0.040$ gap between zero-shot
+and oracle) should be interpreted with care.
 
-\paragraph{Batch-size sensitivity.}
-Information-maximisation objectives are sensitive to batch size through
-the marginal diversity estimate $\bar{p}$. Our experiments use batch
-size $B = 32$; smaller batch sizes (common in memory-constrained
-settings) may destabilise the prevalence-matching term. Single-sample
-TTA~\cite{cpt42025} is an important direction we have not fully explored.
+\paragraph{Single training run per condition.}
+Each condition is trained once with the configuration logged in the
+provided artifacts; we do not report seed-level variability. SHOT-IM
+adaptation, in particular, is known to be sensitive to initialisation
+and batch composition, and its collapse magnitude may vary across
+seeds. Replication across multiple seeds is an important next step.
 
-\paragraph{Qualitative mechanistic claims.}
-Our attention and feature-space analyses provide qualitative evidence for
-the confounding mechanism. A fully quantitative causal intervention---for
-example, counterfactual synthesis of matched images with and without
-camera artefacts---would provide stronger mechanistic evidence. We leave
-this to future work.
+\paragraph{Mechanistic evidence is qualitative.}
+Our t-SNE and attention analyses provide visual support for the
+camera-style-confounder mechanism but do not rule out alternative
+explanations causally. A controlled counterfactual study---e.g.,
+matched-image synthesis with and without camera-specific artefacts,
+or explicit camera-domain probing---would provide stronger evidence.
 
 \subsection{Future Work}
 
-\paragraph{Multi-class glaucoma staging.}
-Extending \sys{} to discriminate glaucoma severity stages (healthy,
-early, moderate, severe) would produce a clinically actionable triage
-output. The adaptation objective would need to respect ordinal label
-structure, suggesting connections to ordinal entropy minimisation
-or mean-teacher approaches with class-ordered consistency constraints.
+\paragraph{When (if ever) is unsupervised adaptation safe here?}
+The most interesting question raised by our results is not
+\emph{how} to fix SFDA, but \emph{whether} there is a regime in
+which unsupervised adaptation reliably helps modern self-supervised
+backbones on cross-ethnic medical screening. Characterising that
+regime---in terms of source-target gap, label-prior shift, and
+backbone capacity---would meaningfully shape deployment guidance.
 
-\paragraph{Continual and streaming adaptation.}
-Real-world screening programmes acquire images continuously; a model
-deployed in a clinic will encounter a stream of patients over months and
-years. Continual TTA methods~\cite{niu2023sar,cpt42025} address
-distribution shift over time, and their integration with the \sys{}
-framework---including protection against forgetting as new camera models
-are introduced---is a natural extension.
+\paragraph{Few-shot adaptation as the practical alternative.}
+A small labelled target set ($5$--$50$ images per class), feasible
+for a local ophthalmologist to annotate, may be a far safer route
+than fully unsupervised adaptation. Few-shot fine-tuning anchors the
+decision boundary to actual labels and structurally cannot be
+satisfied by a constant predictor.
 
-\paragraph{Few-shot guided adaptation.}
-If even a small number of target-domain labels (e.g., five to ten per
-class) can be obtained from a local ophthalmologist, they could
-anchor the adaptation objective and substantially reduce the risk of
-the illusion of calibration. Few-shot source-free adaptation is an
-underexplored but practically important setting for clinical deployment.
-
-\paragraph{Retinal Pigment Score as an adaptation signal.}
+\paragraph{Retinal Pigment Score as a covariate.}
 Rajesh et al.\ \shortcite{rajesh2025} show that the Retinal Pigment
-Score (RPS) can be computed from fundus photographs without demographic
-metadata. Using per-image RPS as a continuous domain-shift indicator
-within the AdaIN calibration stage could provide a more biologically
-grounded feature alignment than channel-wise statistics alone.
+Score (RPS) can be computed directly from fundus images. Stratifying
+zero-shot performance by RPS---rather than by self-reported
+ethnicity---would provide a more biologically grounded measurement of
+the cross-ethnic transfer behaviour we observe.
 
-\paragraph{Uncertainty-aware referral.}
-Screening systems benefit from the ability to flag uncertain cases for
-human review rather than providing a binary decision. Integrating
-\sys{} with deep ensembles, MC-Dropout, or conformal prediction would
-produce well-calibrated uncertainty estimates that could directly drive
-risk-stratified referral protocols.
+\paragraph{Multi-class staging and continual deployment.}
+Extending the same investigation to multi-class glaucoma staging
+(healthy/early/moderate/severe) and to continual streaming
+deployment, where new camera models are introduced over time, would
+test whether the illusion-of-calibration failure mode generalises
+beyond the binary referable/non-referable case.
 
 \paragraph{Prospective clinical validation.}
-Our results are based on retrospective evaluation on a curated dataset.
-A prospective deployment study in an Indian primary-care setting---with
-real-time image acquisition, variable operator skill, and clinical
-workflow integration---is essential before any adaptation method,
-including \sys{}, is considered for real-world deployment. Such a study
-would also provide the labelled target-domain data needed to detect the
-illusion of calibration at deployment time.
+Our results are retrospective. A prospective deployment study in an
+Indian primary-care setting---with real-time acquisition, variable
+operator skill, and clinical workflow integration---is the necessary
+next step before any cross-ethnic glaucoma screening system,
+adapted or not, is considered for real-world deployment.
 
 % ===========================================================
 %  ACKNOWLEDGMENTS
 % ===========================================================
 \section*{Acknowledgments}
 
-We thank the Chákss.u dataset creators at the Indian Institute of
-Science, Bangalore, and the AIROGS challenge organizers for making their
-datasets publicly available. We are grateful to the clinical staff at
-L.V. Prasad Eye Institute, Hyderabad, for valuable discussions on
-ophthalmic screening workflows and the practical constraints of deploying
-AI in Indian clinical settings. Compute resources were provided by the
-Centre for Computing at IIIT Hyderabad.
+We thank the Ch\'{a}kss.u dataset creators at the Indian Institute of
+Science, Bangalore, and the AIROGS challenge organisers for making their
+datasets publicly available, without which this study would not have
+been possible. Compute resources were provided by the Centre for
+Computing at IIIT Hyderabad.
 
 % ===========================================================
 %  BIBLIOGRAPHY
 % ===========================================================
-\begin{thebibliography}{30}
+\begin{thebibliography}{18}
 
 \bibitem[Burlina et~al.(2021)]{burlina2021}
 Philip Burlina, Neil Joshi, William Paul, Kapil D. Pacheco, and Neil M. Bressler.
@@ -973,31 +945,12 @@ Aaron S. Coyner, Praveer Singh, James M. Brown, Susan Ostmo, R.V. Paul Chan,
   racial bias in retinal images.
 \newblock \textit{JAMA Ophthalmology}, 141(6):543--552.
 
-\bibitem[CPT4(2025)]{cpt42025}
-Anonymous.
-\newblock 2025.
-\newblock CPT4: Continual prompted transformer for test-time training.
-\newblock \textit{arXiv preprint}.
-
-\bibitem[CLMS(2024)]{clms2024}
-Anonymous.
-\newblock 2024.
-\newblock Continual learning for medical source-free domain adaptation.
-\newblock \textit{arXiv preprint}.
-
 \bibitem[de~Vente et~al.(2024)]{devente2024}
 Coen de~Vente, Koenraad A. Vermeer, Nicolas Jaccard, et~al.
 \newblock 2024.
 \newblock {AIROGS}: Artificial intelligence for robust glaucoma screening
   challenge.
 \newblock \textit{IEEE Transactions on Medical Imaging}, 43(1):542--557.
-
-\bibitem[Fan et~al.(2024)]{fan2024}
-Rui Fan, Christopher Bowd, Mark Christopher, and Michael H. Goldbaum.
-\newblock 2024.
-\newblock Cross-ethnic generalisation of vision transformers for glaucoma
-  detection from fundus photographs.
-\newblock \textit{Ophthalmology Science}, 4(2):100386.
 
 \bibitem[Fang et~al.(2024)]{fang2024survey}
 Yuqi Fang, Haofei Yao, Hao Zhao, Zhilin Zhang, Zikang Ma, Yan Sun, and
@@ -1006,21 +959,6 @@ Yuqi Fang, Haofei Yao, Hao Zhao, Zhilin Zhang, Zikang Ma, Yan Sun, and
 \newblock A comprehensive survey on source-free domain adaptation.
 \newblock \textit{IEEE Transactions on Pattern Analysis and Machine
   Intelligence (TPAMI)}, 46(8):5743--5762.
-
-\bibitem[Guo et~al.(2017)]{guo2017}
-Chuan Guo, Geoff Pleiss, Yu Sun, and Kilian Q. Weinberger.
-\newblock 2017.
-\newblock On calibration of modern neural networks.
-\newblock In \textit{Proceedings of the 34th International Conference on
-  Machine Learning (ICML)}, pages 1321--1330.
-
-\bibitem[Huang and Belongie(2017)]{huang2017}
-Xun Huang and Serge Belongie.
-\newblock 2017.
-\newblock Arbitrary style transfer in real-time with adaptive instance
-  normalization.
-\newblock In \textit{Proceedings of the IEEE/CVF International Conference on
-  Computer Vision (ICCV)}, pages 1501--1510.
 
 \bibitem[Kumar et~al.(2023)]{kumar2023}
 J.R. Harish Kumar, Chandra Sekhar Seelamantula, J.H. Gagan, et~al.
@@ -1043,20 +981,6 @@ Jian Liang, Dapeng Hu, and Jiashi Feng.
   transfer for unsupervised domain adaptation.
 \newblock In \textit{Proceedings of the 37th International Conference on
   Machine Learning (ICML)}, pages 6028--6039.
-
-\bibitem[McInnes et~al.(2018)]{mcinnes2018}
-Leland McInnes, John Healy, and James Melville.
-\newblock 2018.
-\newblock {UMAP}: Uniform manifold approximation and projection for dimension
-  reduction.
-\newblock \textit{arXiv preprint arXiv:1802.03426}.
-
-\bibitem[MedSeg-TTA(2025)]{medsegtta2025}
-Anonymous.
-\newblock 2025.
-\newblock {MedSeg-TTA}: A comprehensive benchmark for test-time adaptation in
-  medical image segmentation.
-\newblock \textit{arXiv preprint}.
 
 \bibitem[Niu et~al.(2022)]{niu2022eata}
 Shuaicheng Niu, Jiaxiang Wu, Yifan Zhang, Yaofo Chen, Shijian Zheng,
@@ -1117,14 +1041,6 @@ Dequan Wang, Evan Shelhamer, Shaoteng Liu, Bruno Olshausen, and Trevor Darrell.
 \newblock In \textit{International Conference on Learning Representations
   (ICLR)}.
 
-\bibitem[Wu et~al.(2020)]{wu2020}
-Zonghan Wu, Xinyi Wang, Joseph E. Gonzalez, Tom Goldstein, and Ser-Nam Lim.
-\newblock 2020.
-\newblock Minimal-entropy diversity maximisation for source-free
-  adaptation.
-\newblock In \textit{Proceedings of the IEEE/CVF International Conference on
-  Computer Vision (ICCV)}.
-
 \bibitem[Yi et~al.(2024)]{yi2024parcl}
 Xuelin Yi, Long Chen, and Yang Zhang.
 \newblock 2024.
@@ -1150,42 +1066,67 @@ Yukun Zhou, Mark A. Chia, Siegfried K. Wagner, et~al.
 \section{Hyperparameter Settings}
 \label{app:hyperparams}%
 
+Table~\ref{tab:hyper} reports the hyperparameter settings used for the
+three trained conditions (source, oracle, SHOT-IM adaptation),
+matching the configuration logged for the runs that produced
+Table~\ref{tab:main}.
+
 \begin{table}[ht]
 \centering
 \small
-\caption{Complete hyperparameter settings for all \sys{} components.}
+\caption{Hyperparameter settings for the trained conditions.}
+\label{tab:hyper}%
 \resizebox{\columnwidth}{!}{%
 \begin{tabular}{lll}
 \toprule
-\textbf{Component} & \textbf{Hyperparameter} & \textbf{Value} \\
+\textbf{Condition} & \textbf{Hyperparameter} & \textbf{Value} \\
 \midrule
-\multirow{4}{*}{AdaIN Calib.}
-  & Layers adapted & Last 2 ViT blocks \\
-  & Source samples/class & 200 \\
-  & EMA momentum & 0.9 \\
-  & Applied at test time & Yes (always on) \\
+\multirow{8}{*}{Source training (\src{})}
+  & Backbone & DINOv3 ViT-L/16 \\
+  & Trainable params & Last 2 ViT blocks $+$ head \\
+  & Trainable / total & 25.2\,M / 303.1\,M ($8.3\%$) \\
+  & Loss & BCE w/ label smoothing $\varepsilon = 0.05$ \\
+  & Optimiser & AdamW \\
+  & Learning rate & $1\times10^{-4}$ \\
+  & Weight decay & $0.01$ \\
+  & Schedule / epochs & cosine / $50$ (early stop) \\
 \midrule
-\multirow{6}{*}{IM Adaptation}
+\multirow{4}{*}{Oracle (\tgt{})}
+  & Architecture & same as source \\
+  & Train/test split & official $1{,}009/336$ \\
+  & Optimiser / lr & AdamW / $1\times10^{-4}$ \\
+  & Schedule / epochs & cosine / $50$ (early stop) \\
+\midrule
+\multirow{6}{*}{SHOT-IM adaptation}
+  & Frozen / adapted & head / feature extractor \\
   & Optimiser & Adam \\
-  & Learning rate & $5 \times 10^{-5}$ \\
-  & Weight decay & $10^{-4}$ \\
-  & Batch size & 32 \\
-  & Epochs & 10 \\
-  & $\lambda_1, \lambda_2, \lambda_3$ & 1.0, 0.5, 0.3 \\
+  & Learning rate & $1\times10^{-4}$ \\
+  & Weight decay & $0$ \\
+  & Batch size & $32$ \\
+  & Epochs & $10$ \\
 \midrule
-\multirow{2}{*}{Stability Select.}
-  & Entropy threshold percentile & 70\% \\
-  & Min samples per batch & 10 \\
-\midrule
-\multirow{3}{*}{Pseudo-labels}
-  & Confidence threshold $\tau_c$ & 0.85 \\
-  & Fine-tuning epochs & 3 \\
-  & Consistency augmented views & 2 \\
-\midrule
-Temperature Scaling & Temperature $T$ & 1.5 \\
+\multirow{4}{*}{Shared}
+  & Input resolution & $512 \times 512$ \\
+  & Normalisation & ImageNet mean/std \\
+  & Train aug.\ & H/V flip, $\pm 15^\circ$, jitter, RRC \\
+  & Hardware & 1$\times$ NVIDIA A100 40\,GB \\
 \bottomrule
 \end{tabular}%
 }
 \end{table}
+
+\section{RAG Baseline Configuration}
+\label{app:rag}%
+
+The retrieval-augmented baseline indexes DINOv3 \texttt{[CLS]}-token
+embeddings of the AIROGS test set ($n = 770$) with a FAISS
+\texttt{IndexFlatL2}. For each \tgt{} test image we retrieve $k$
+nearest neighbours and predict via three aggregation methods: majority
+vote, similarity-weighted vote, and mean similarity. We grid-search
+$k \in \{5, 10, 20, 50\}$, giving $12$ configurations in total. The
+best configuration ($k = 5$, majority vote) achieves $0.509$
+\auroc{}; \auroc{} across the full grid spans $0.457$--$0.509$,
+confirming that the failure of nearest-neighbour transfer is not
+sensitive to $k$ or aggregation choice.
 
 \end{document}
