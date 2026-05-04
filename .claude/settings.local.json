@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(miktex --admin packages update-package-database)",
+      "Bash(miktex packages *)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\inesh\\.claude\\projects\\c--Users-inesh-Desktop-The-Illusion-of-Calibration"
+    ]
+  }
+}
