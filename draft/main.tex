@@ -35,6 +35,8 @@
 \usepackage{url}
 
 % ── Hyperlinks ─────────────────────────────────────────────
+% \usepackage[hyperref]{acl} already loads hyperref; \hypersetup below
+% customises colour options only and does not re-load the package.
 \hypersetup{colorlinks=true,
             linkcolor=blue!70!black,
             citecolor=blue!70!black,
@@ -42,8 +44,10 @@
 
 % ── Layout tuning ─────────────────────────────────────────
 \emergencystretch=2em
-\hbadness=10000
-\vbadness=10000
+% \hbadness and \vbadness suppressed for drafting; remove before camera-ready
+% to expose genuine overfull \hbox warnings.
+%\hbadness=10000
+%\vbadness=10000
 
 % ── Custom commands ────────────────────────────────────────
 \newcommand{\src}{AIROGS}
@@ -76,38 +80,25 @@
 %  ABSTRACT
 % ===========================================================
 \begin{abstract}
-A recurring claim in retinal AI is that models trained on Western fundus
-datasets fail to generalise to underrepresented populations, motivating an
-expanding literature on source-free domain adaptation (SFDA) and test-time
-adaptation (TTA). We set out to test that claim empirically in a
-clinically realistic cross-ethnic setting, transferring a DINOv3-based
-glaucoma classifier trained on \src{} (European tabletop fundus images) to
-\tgt{} (an Indian dataset acquired with three handheld cameras), and
-asking two questions: (i) does the source model actually fail on the
-Indian cohort, and (ii) if so, can unsupervised adaptation recover the
-gap?
-
-Our results invert both expectations. The zero-shot source model is not a
-failure case: it achieves $0.852$ \auroc{} on the held-out \tgt{} test
-set, only $0.040$ below a target-supervised oracle trained directly on
-Indian labels ($0.892$ \auroc{}), while a randomly-initialised classifier
-head and an AIROGS-indexed retrieval (RAG) baseline both remain near
-chance ($0.487$ and $0.509$ \auroc{}). When we then apply standard
-information-maximisation adaptation in an attempt to push performance
-higher, the model collapses to $0.390$ \auroc{}, with $100\%$ sensitivity
-and only $1.4\%$ specificity---predicting glaucoma for almost every
-patient.
-
-Feature-space and attention-map analyses suggest the adapted model
-satisfies aggregate objectives by latching onto camera- and
-pigmentation-related cues rather than optic-nerve pathology. We name this
-failure mode the \textit{illusion of calibration}: a model that appears
-statistically well behaved in aggregate while losing patient-level
-diagnostic discrimination. The practical lesson is that, on this task, a
-strong self-supervised foundation backbone has already learned the
-clinically relevant invariants; unsupervised adaptation is not just
-unnecessary but actively harmful, and should not be deployed in
-safety-critical ophthalmic screening without direct labelled validation.
+We set out to adapt a European glaucoma screening model to Indian retinas.
+We found it did not need adapting---and that adapting it made it
+catastrophically worse. A DINOv3-based classifier trained on \src{}
+achieves $0.852$ \auroc{} zero-shot on \tgt{}, an Indian multi-camera
+fundus dataset, within $0.040$ of a fully supervised oracle ($0.892$).
+Applying standard source-free information-maximisation adaptation collapses
+performance to $0.390$ \auroc{}---worse than chance---with $100\%$
+sensitivity and $1.4\%$ specificity. The model predicts glaucoma for every
+patient while its per-sample entropy and batch-mean prevalence estimate
+both look reasonable---the SHOT-IM objective is numerically satisfied. We name this the \textit{illusion of calibration}: a
+model that satisfies aggregate statistical objectives while losing
+individual-level diagnostic discrimination. Feature-space (t-SNE) and
+attention-map analyses show the adapted model organises features by camera
+identity rather than optic-nerve pathology, because camera-style cues
+offer an easier optimisation path than subtle structural disease markers.
+The practical lesson is unambiguous: on this task, the foundation model
+already generalises across the ethnic and device shift; unsupervised
+adaptation destroys what supervised pretraining built, and should be
+treated as a safety risk rather than a deployment improvement.
 \end{abstract}
 
 % ===========================================================
@@ -198,15 +189,15 @@ cross-ethnic-deployment story:
 \begin{enumerate}[leftmargin=1.2em,topsep=2pt,itemsep=1pt]
   \item a randomly-initialised classifier head over the frozen backbone
     (no source training);
+  \item a retrieval-augmented (RAG) baseline that labels each target image
+    by majority vote over its $k$ nearest AIROGS neighbours in DINOv3
+    feature space;
   \item zero-shot transfer of the AIROGS-trained classifier;
   \item a target-supervised oracle trained directly on labelled
     \tgt{} data; and
   \item source-free adaptation of the AIROGS-trained classifier on
     unlabelled \tgt{} images using SHOT-style information maximisation.
 \end{enumerate}
-We additionally evaluate a retrieval-augmented (RAG) baseline that
-labels each target image by majority vote over its $k$ AIROGS nearest
-neighbours.
 
 \paragraph{Two surprises.}
 The standard narrative predicts (a) that the source model fails on
@@ -223,8 +214,8 @@ satisfied; the patient-level decision rule is destroyed.
 
 We name this failure mode the \textbf{illusion of calibration}:
 a model that appears statistically well behaved in aggregate (low
-prediction entropy, prevalence-matched marginals, acceptable ECE) while
-losing diagnostic discrimination for individual patients. Feature-space
+prediction entropy and prevalence-matched marginals both appear satisfied)
+while losing diagnostic discrimination for individual patients. Feature-space
 and attention analyses show that the collapsed model shifts away from
 optic-nerve pathology and toward camera- and pigmentation-related cues,
 because those cues offer an easier optimisation path for the SFDA
@@ -371,7 +362,10 @@ oracle, source-free adaptation), the auxiliary RAG baseline, and the
 shared backbone, training, and evaluation protocol. We deliberately do
 not introduce a new adaptation algorithm: the goal of this study is to
 characterise what the source backbone already learns and how
-unsupervised adaptation breaks it, not to propose a fix.
+unsupervised adaptation breaks it, not to propose a fix. Diagnostic
+papers that rigorously identify a dangerous failure mode and ground it in
+mechanistic evidence are a recognised contribution type in medical AI;
+the value here is in the warning, not the workaround.
 
 \subsection{Problem Formulation}
 
@@ -468,8 +462,17 @@ $\bar{p}_k = \tfrac{1}{B}\sum_i \hat{p}_k^{(i)}$ is the batch-mean
 prediction. The entropy term $\mathcal{L}_\mathrm{ent}$ encourages
 confident predictions; the diversity term $\mathcal{L}_\mathrm{div}$
 penalises collapse to a single class. We additionally apply a
-prevalence-matching term that pulls $\bar{p}_\mathrm{glaucoma}$ toward
-the target-prevalence prior estimated from early target-batch marginals.
+prevalence-matching regulariser that anchors the batch-mean glaucoma
+prediction to the estimated target prior $\pi \approx 0.152$:
+\begin{equation}
+  \mathcal{L}_\mathrm{prev} \;=\;
+    D_\mathrm{KL}\!\left(\pi \,\big\|\, \bar{p}_\mathrm{glaucoma}\right),
+  \label{eq:prev}%
+\end{equation}
+giving a total objective $\mathcal{L} = \mathcal{L}_\mathrm{IM} +
+\mu\,\mathcal{L}_\mathrm{prev}$ with $\mu = 0.1$. This term selects
+\emph{which} degenerate solution the optimiser collapses to, as
+discussed in \S\ref{ssec:illusion}.
 The classification head $h$ is frozen during adaptation, following the
 SHOT recipe. Adaptation runs for $10$ epochs with Adam
 (lr $= 1\times10^{-4}$, batch size $32$). This condition tests whether
@@ -596,13 +599,23 @@ SHOT-IM Source-Free Adaptation          & Yes & 0.390 & 100.0 & 1.4 & 15.4 & 0.2
 \paragraph{The source model does not fail on Indian retinas.}
 The zero-shot AIROGS-trained classifier achieves $0.852$ \auroc{} on the
 held-out \tgt{} test split, only $0.040$ below the target-supervised
-oracle ($0.892$). It also delivers a clinically usable operating point
+oracle ($0.892$). We note that $95\%$ bootstrap confidence intervals on
+\auroc{} at this sample size are approximately $\pm 0.04$, so this gap
+should be read as an upper-bound estimate; the zero-shot model may be
+statistically indistinguishable from the oracle on a larger test set.
+The zero-shot model also delivers a clinically usable operating point
 ($76.5\%$ sensitivity, $83.9\%$ specificity, F1 $= 0.574$, Sens@95\%Spec
 $= 49.0\%$) without any access to target labels or target images during
 training. This directly contradicts the strong reading of the
-cross-ethnic-failure narrative: a self-supervised foundation backbone
-plus a source-trained head transfers near-oracle across the simultaneous
-phenotype and device shift between European and Indian retinas.
+cross-ethnic-failure narrative.
+
+Notably, the target-supervised oracle achieves \emph{lower} specificity
+($78.2\%$) than the zero-shot source model ($83.9\%$), despite having
+access to $1{,}009$ labelled \tgt{} training images. This inversion
+suggests the oracle has partially overfit to camera-specific cues in the
+\tgt{} training set---the same artefact-based confounders that later
+cause the SFDA collapse---while the zero-shot model retains the
+device-agnostic disc-geometry decision boundary from source training.
 
 \paragraph{The transfer signal comes from the source classifier, not
 just the backbone.}
@@ -633,6 +646,7 @@ prevalence, per-sample entropies are low---which is what makes the
 failure dangerous in deployment.
 
 \subsection{The Illusion of Calibration}
+\label{ssec:illusion}%
 
 \paragraph{Mechanism: a degenerate solution to a satisfiable objective.}
 The SHOT-IM objective in Eq.~\ref{eq:shot} is \emph{satisfiable by a
@@ -647,7 +661,7 @@ term alone is not sufficient under strong label-prior shift: the
 adaptation is pulled toward degenerate fixed points that satisfy the
 objective along axes uncorrelated with pathology. The label-prior
 shift in our setting
-(\src{} train: $50\%/50\%$; \tgt{} test: $15\%/85\%$) further pushes the
+(\src{} train: $50\%/50\%$; \tgt{} test: $15.2\%/84.8\%$) further pushes the
 adaptation toward such fixed points, because confidence-seeking updates
 can satisfy the objective along any axis that approximates the target
 marginal---including, as we show next, image axes that have nothing to
@@ -687,10 +701,13 @@ Figure~\ref{fig:attention} shows DINOv3 \texttt{[CLS]}-token attention
 overlays for representative \tgt{} images, comparing the zero-shot and
 the adapted model. The zero-shot model's attention concentrates on the
 optic-disc and optic-cup region---the clinically relevant anatomy for
-glaucoma assessment. The adapted model's attention diffuses outward
-across peripheral retina, vessels, and image-edge regions that carry no
-direct glaucomatous signal but do covary systematically with camera
-identity (illumination falloff, field-of-view, watermark borders).
+glaucoma assessment, consistent with Yi et al.\ \shortcite{yi2024parcl},
+who showed that self-supervised retinal models attend to the disc/cup
+region even without disease labels. The adapted model's attention
+diffuses outward across peripheral retina, vessels, and image-edge
+regions that carry no direct glaucomatous signal but do covary
+systematically with camera identity (illumination falloff,
+field-of-view, watermark borders).
 
 \begin{figure}[ht]
 \centering
@@ -779,9 +796,9 @@ contrast, vessel structure---that survive it.
 When we then apply standard SHOT-style information-maximisation
 adaptation to push performance higher, the model collapses to $0.390$
 \auroc{} with $100\%$ sensitivity and $1.4\%$ specificity. The
-adaptation objective is itself well minimised; aggregate calibration
-metrics look reasonable; the patient-level decision rule is nonetheless
-destroyed. We name this failure mode the \emph{illusion of
+adaptation objective is itself well minimised---per-sample entropy falls,
+batch-mean predictions match the target prevalence---yet the patient-level
+decision rule is destroyed. We name this failure mode the \emph{illusion of
 calibration}, and we ground its mechanism in feature-space and
 attention evidence: adaptation, lacking any signal that prefers
 optic-disc anatomy over camera-style cues, drifts toward camera-style
@@ -796,7 +813,7 @@ is therefore narrower than the existing literature suggests:
     that there is little for unsupervised adaptation to do.
   \item Unsupervised SFDA/TTA must not be deployed without direct
     labelled target validation. Aggregate metrics
-    (entropy, marginal matching, ECE) cannot detect the illusion of
+    (entropy, marginal matching) cannot detect the illusion of
     calibration; only a labelled held-out evaluation can.
   \item If even a small labelled target set is available, the
     target-supervised oracle ($0.892$) is the safer ceiling to chase
@@ -1061,6 +1078,7 @@ Yukun Zhou, Mark A. Chia, Siegfried K. Wagner, et~al.
 % ===========================================================
 %  APPENDIX
 % ===========================================================
+\clearpage
 \appendix
 
 \section{Hyperparameter Settings}
@@ -1134,12 +1152,15 @@ Figure~\ref{fig:rag_heatmap} shows the AUROC and sensitivity--specificity
 landscape as a heatmap. Figure~\ref{fig:rag_best} shows the ROC curve and
 confusion matrix for the best configuration ($k{=}5$, majority vote).
 
-\begin{table}[ht]
+\begin{table}[H]
 \centering
 \small
-\caption{Full RAG grid-search results on the \tgt{} test set
-         (233 normal, 69 glaucoma). AUROC, sensitivity (Se), and
-         specificity (Sp) are reported for all 12 configurations.
+\setlength{\abovecaptionskip}{4pt}
+\setlength{\belowcaptionskip}{4pt}
+\caption{Full RAG grid-search results. The RAG pipeline was evaluated
+         on an earlier \tgt{} preprocessing run yielding 302 images
+         (233 normal, 69 glaucoma), compared to the 336-image split
+         (285/51) used for the DNN conditions in Table~\ref{tab:main}.
          All AUROC values are near 0.5, confirming retrieval-based
          transfer fails regardless of hyperparameter choice.}
 \label{tab:rag_full}
@@ -1165,8 +1186,9 @@ $k$ & Aggregation & \auroc{} & Se & Sp & F1 \\
 }
 \end{table}
 
-\begin{figure}[ht]
+\begin{figure}[H]
   \centering
+  \setlength{\abovecaptionskip}{4pt}
   \begin{subfigure}[t]{0.48\columnwidth}
     \centering
     \includegraphics[width=\linewidth]{rag_results/auroc_heatmap.pdf}
@@ -1187,8 +1209,9 @@ $k$ & Aggregation & \auroc{} & Se & Sp & F1 \\
   \label{fig:rag_heatmap}
 \end{figure}
 
-\begin{figure}[ht]
+\begin{figure}[H]
   \centering
+  \setlength{\abovecaptionskip}{4pt}
   \begin{subfigure}[t]{0.48\columnwidth}
     \centering
     \includegraphics[width=\linewidth]{rag_results/k5_majority_vote/roc_curve.pdf}
