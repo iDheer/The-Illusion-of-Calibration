@@ -3,6 +3,8 @@
 ### Vulnerabilities of Unsupervised Test-Time Adaptation in Cross-Ethnic Glaucoma Screening
 
 **Inesh Dheer** · IIIT Hyderabad · `inesh.dheer@research.iiit.ac.in`
+**Varun Gupta** · IIIT Hyderabad · `varun.gup@students.iiit.ac.in`
+
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-red.svg)](https://pytorch.org/)
@@ -221,9 +223,3 @@ For cross-ethnic glaucoma screening deployment, the evidence prescribes a clear 
 3. **If resources permit, collect small labelled datasets.** The marginal Oracle gain (0.892 vs 0.852) may not justify annotation costs, but remains the safest option.
 
 ---
-
-## Paper
-
-Full paper available in [FinalSubmission/main.tex](FinalSubmission/main.tex).
-
-> *Dheer, I. "The Illusion of Calibration: Vulnerabilities of Unsupervised Test-Time Adaptation in Cross-Ethnic Glaucoma Screening." IIIT Hyderabad, 2026.*t
