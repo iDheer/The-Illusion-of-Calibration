@@ -1,0 +1,121 @@
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  PHASE D: COMPREHENSIVE EVALUATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+📊 Experiment Logger Initialized
+   Log Directory: logs/run_2026-04-01_10-40-41
+   Run ID: 2026-04-01_10-40-41
+
+
+======================================================================
+   NETRA-ADAPT Run-7: COMPREHENSIVE EVALUATION
+   PrototypeMixEnt + Consistency Loss + Progressive Self-Training
+======================================================================
+
+[TEST SET] Chákṣu: 336 total — 51 glaucoma / 285 normal
+  ✓  51 positives — results are statistically meaningful
+
+[SANITY CHECK] Evaluating on AIROGS Test Set
+----------------------------------------------------------------------
+
+AIROGS → AIROGS
+Loading DINOv3 ViT-L/16 backbone from facebook/dinov3-vitl16-pretrain-lvd1689m...
+Loading weights: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 415/415 [00:00<00:00, 5574.16it/s]
+  Unfroze last 2 transformer blocks
+  Total parameters:     303,131,650
+  Trainable parameters: 25,196,546 (8.3%)
+  AUROC: 0.9799  (should be >0.85 if training worked)                                                                                                                          
+
+
+[MAIN EXPERIMENTS] Evaluating on Chákṣu Test Set (Cross-Ethnic)
+----------------------------------------------------------------------
+
+Pretrained → Chákṣu
+----------------------------------------------------------------------
+Loading DINOv3 ViT-L/16 backbone from facebook/dinov3-vitl16-pretrain-lvd1689m...
+Loading weights: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 415/415 [00:00<00:00, 5251.18it/s]
+  Unfroze last 2 transformer blocks
+  Total parameters:     303,131,650
+  Trainable parameters: 25,196,546 (8.3%)
+  Using pretrained DINOv3 with random classifier head (no fine-tuning)
+  AUROC:        0.4870  (48.7%)                                                                                                                                                
+  Sensitivity:  0.1961  (19.6%)
+  Specificity:  0.9053  (90.5%)
+  Precision:    0.2703  (27.0%)
+  F1-Score:     0.2273
+  Accuracy:     0.7976  (79.8%)
+  Sens@95Spec:  0.1176  (11.8%)
+
+AIROGS → Chákṣu
+----------------------------------------------------------------------
+Loading DINOv3 ViT-L/16 backbone from facebook/dinov3-vitl16-pretrain-lvd1689m...
+Loading weights: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 415/415 [00:00<00:00, 4187.70it/s]
+  Unfroze last 2 transformer blocks
+  Total parameters:     303,131,650
+  Trainable parameters: 25,196,546 (8.3%)
+  AUROC:        0.8516  (85.2%)                                                                                                                                                
+  Sensitivity:  0.7647  (76.5%)
+  Specificity:  0.8386  (83.9%)
+  Precision:    0.4588  (45.9%)
+  F1-Score:     0.5735
+  Accuracy:     0.8274  (82.7%)
+  Sens@95Spec:  0.4902  (49.0%)
+
+Chákṣu → Chákṣu
+----------------------------------------------------------------------
+Loading DINOv3 ViT-L/16 backbone from facebook/dinov3-vitl16-pretrain-lvd1689m...
+Loading weights: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 415/415 [00:00<00:00, 4033.61it/s]
+  Unfroze last 2 transformer blocks
+  Total parameters:     303,131,650
+  Trainable parameters: 25,196,546 (8.3%)
+  AUROC:        0.8915  (89.1%)                                                                                                                                                
+  Sensitivity:  0.9216  (92.2%)
+  Specificity:  0.7825  (78.2%)
+  Precision:    0.4312  (43.1%)
+  F1-Score:     0.5875
+  Accuracy:     0.8036  (80.4%)
+  Sens@95Spec:  0.4510  (45.1%)
+
+AIROGS+Adapt → Chákṣu
+----------------------------------------------------------------------
+Loading DINOv3 ViT-L/16 backbone from facebook/dinov3-vitl16-pretrain-lvd1689m...
+Loading weights: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 415/415 [00:00<00:00, 4643.22it/s]
+  Unfroze last 2 transformer blocks
+  Total parameters:     303,131,650
+  Trainable parameters: 25,196,546 (8.3%)
+  AUROC:        0.3899  (39.0%)                                                                                                                                                
+  Sensitivity:  1.0000  (100.0%)
+  Specificity:  0.0140  (1.4%)
+  Precision:    0.1536  (15.4%)
+  F1-Score:     0.2663
+  Accuracy:     0.1637  (16.4%)
+  Sens@95Spec:  0.0196  (2.0%)
+
+======================================================================
+   GENERATING VISUALIZATIONS...
+
+✓ Saved ROC curves to /workspace/results_run7/evaluation/roc_curves.png
+✓ Saved confusion matrices to /workspace/results_run7/evaluation/confusion_matrices.png
+✓ Saved metrics comparison to /workspace/results_run7/evaluation/metrics_comparison.png
+✓ Saved results table to /workspace/results_run7/evaluation/results_table.csv
+✓ Saved LaTeX table to /workspace/results_run7/evaluation/results_table.tex
+
+======================================================================
+   EVALUATION COMPLETE
+   All results saved to: /workspace/results_run7/evaluation/
+======================================================================
+[✓] Evaluation complete in 1m 24s
+
+═══════════════════════════════════════════════════════════════════════
+  NETRA-ADAPT RUN-7 — PIPELINE COMPLETE
+═══════════════════════════════════════════════════════════════════════
+
+Total time: 2h 16m 50s
+
+Results table:
+Model,AUROC,Sensitivity,Specificity,Precision,F1-Score,Accuracy,Sens@95%Spec
+Pretrained → Chákṣu,0.4870,0.1961,0.9053,0.2703,0.2273,0.7976,0.1176
+AIROGS → Chákṣu,0.8516,0.7647,0.8386,0.4588,0.5735,0.8274,0.4902
+Chákṣu → Chákṣu,0.8915,0.9216,0.7825,0.4312,0.5875,0.8036,0.4510
+AIROGS+Adapt → Chákṣu,0.3899,1.0000,0.0140,0.1536,0.2663,0.1637,0.0196

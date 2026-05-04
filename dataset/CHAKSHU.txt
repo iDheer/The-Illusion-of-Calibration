@@ -1,0 +1,121 @@
+Chákṣu: A glaucoma specific fundus image database 
+
+
+
+
+
+J. R. Harish Kumar, Chandra Sekhar Seelamantula, J. H. Gagan, Yogish S. Kamath, Neetha I. R. Kuzhuppilly, U. Vivekanand, Preeti Gupta, and Shilpa Patil 
+
+
+
+Introduction 
+
+Glaucoma is a chronic, irreversible, and slowly progressive optic neuropathy that damages the optic nerve. Depending on the extent of damage to the optic nerve, glaucoma can cause moderate to severe vision loss. Glaucoma is asymptomatic in the early stages. It is not curable, and vision lost cannot be restored. However, by early screening and detection, progression of the disease can be slowed down. Color fundus imaging is the most viable non-invasive means of examining the retina for glaucoma. The widest application of fundus imaging is in optic nerve head or optic disc (OD) examination for glaucoma management. Fundus imaging is widely used due to the relative ease of establishing a digital baseline to judge the progression of the disease and the effectiveness of the treatment. There is a dearth of a glaucoma specific database and Chákṣu IMAGE database is an attempt to fill that gap. The database is also specific to the Indian ethnicity – a demography that has not been covered adequately in the existing databases. 
+
+
+
+The Chákṣu IMAGE database
+
+Chákṣu IMAGE, a new Indian ethnicity retinal fundus image database, has been established for the evaluation of computer-assisted glaucoma prescreening methods. ‘Chákṣu ’ is a Sanskrit word for the ‘Eye’ and ‘IMAGE’ is an acronym for IISc-MAHE Glaucoma Evaluation database. This database is a result of an interdisciplinary collaboration between Indian Institute of Science (IISc) and Manipal Academy of Higher Education (MAHE). The database consists of retinal color fundus images acquired using three different devices. Five expert ophthalmologists provided the OD and optic cup (OC) ground-truth for the evaluation of segmentation performance and a binary decision (normal/glaucomatous). The uncompressed and compressed versions of the size of the database are about 230 GB and 12 GB, respectively. 
+
+
+
+Chákṣu IMAGE consists of 1345 retinal fundus images stored in JPEG/PNG format, with 8 bits per color channel, acquired using three devices: Remidio non-mydriatic Fundus-on-Phone camera with a resolution of 2448×3264 pixels (1074 images), Forus 3Nethra Classic non-mydriatic fundus camera with a resolution of 2048×1536 pixels (126 images), and a Bosch handheld fundus camera with a resolution of 1920×1440 pixels (145 images). This is by far the largest Indian ethnicity-specific fundus image database. Most of the images acquired by these devices are OD-centered and particular to the assessment of OD and glaucoma. The patient’s personal information was anonymized. Five expert ophthalmologists provided manual OD and OC annotations and a decision on whether the subject is glaucoma suspect or not. Their experience ranges from 5 to 15 years. 
+
+
+
+The entire database of 1345 fundus images is divided into training and test subsets comprising 1009 images and 336 images, respectively. The train and test subsets are approximately in the ratio of 3:1. The database provides information about OD and OC height/width/area, and neuroretinal rim area leading to the computation of clinically relevant glaucoma parameters such as vertical cup-to-disc ratio (VCDR), horizontal cup-to-disc ratio (HCDR), and area cup-to-disc ratio (ACDR) from the experts’ annotations. 
+
+
+
+  
+
+File Structure 
+
+The Chákṣu IMAGE dataset has the following directory/file tree structure in the Train/Test sets:
+
+
+
+1.0_Original_Fundus_Images
+
+-Bosch 
+
+-Forus  
+
+-Remedio 
+
+2.0_Doctors_Annotations 
+
+-Expert 1  
+
+-Expert 2  
+
+-Expert 3  
+
+-Expert 4  
+
+-Expert 5 
+
+3.0_Doctors_Annotations_Binary_OD_OC 
+
+-Expert 1  
+
+-Expert 2 
+
+-Expert 3  
+
+-Expert 4  
+
+-Expert 5 
+
+4.0_OD_OC_Fusion_Images 
+
+-Expert 1  
+
+-Expert 2  
+
+-Expert 3 
+
+-Expert 4  
+
+-Expert 5 
+
+-Mean
+
+-Median
+
+-Majority
+
+-STAPLE
+
+5.0_OD_OC_Mean_Median_Majority_STAPLE  
+
+-Bosch   
+
+-Forus  
+
+-Remedio 
+
+6.0_Glaucoma_Decision  
+
+-Expert 1  
+
+-Expert 2  
+
+-Expert 3 
+
+-Expert 4  
+
+-Expert 5  
+
+-Glaucoma_decision_comparision
+ 
+
+The folder 1.0_Original_Fundus_Images in the Train set contains 104, 95, and 810 original color fundus images aquired from Bosch hand-held, Forus 3Nethra Classic, and Remedio FoP devices, respectively. The folder 1.0_Original_Fundus_Images in the Test set contains 41, 31 and 264 original color fundus images aquired from Bosch hand-held, Forus 3Nethra Classic, and Remedio FoP devices, respectively. The folder 2.0_Doctors_Annotations in the Train/Test set contains five expert doctors’ annotations of optic disc and optic cup. The  binary segmentation of optic disc and optic cup is contained in the folder 3.0_Doctors_Annotations_binary_OD_OC in the Train/Test set. The folder
+4.0_OD_OC_Fusion_Images in the Train/Test set contains binary images of optic disc and optic cup fused into one. The folder 5.0_OD_OC_Mean_Median_Majority_STAPLE in the Train/Test set contains the overlay, mean, median, majority, and STAPLE algorithm based gold standard binary images obtained from the binary images of doctors annotations. The folder 6.0_Glaucoma_Decision in the Train/Test set contains the glaucoma decision of several experts and also a comparison of the decisions.
+
+
+
+Acknowledgments
+
+We would like to thank Manipal Academy of Higher Education (MAHE) for permitting us to acquire retinal fundus images at its constituent institutions. Thanks to all the subjects for consenting and taking part in the fundus examination. Thanks to Remidio Innovative Solutions Pvt. Ltd., Forus Health Pvt. Ltd. and Bosch Eye Care Solutions, Bengaluru, Karnataka, India, for the support provided during fundus image acquisition using their fundus imaging devices. We would also like to thank Subramanya Jois, Harsha Sridhar, Harshit Shirsat, and Aniketh Manjunath for insightful technical discussions and also for being part of the data acquisition and curating activity. This effort was funded by IMPRINT-India (Project id: 6013) and Science and Engineering Research Board (SERB)-Teachers Associateship for Research Excellence (TARE) fellowship (Project id: TAR/2019/000037). 

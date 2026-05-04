@@ -226,4 +226,4 @@ For cross-ethnic glaucoma screening deployment, the evidence prescribes a clear 
 
 Full paper available in [FinalSubmission/main.tex](FinalSubmission/main.tex).
 
-> *Dheer, I. "The Illusion of Calibration: Vulnerabilities of Unsupervised Test-Time Adaptation in Cross-Ethnic Glaucoma Screening." IIIT Hyderabad, 2026.*
+> *Dheer, I. "The Illusion of Calibration: Vulnerabilities of Unsupervised Test-Time Adaptation in Cross-Ethnic Glaucoma Screening." IIIT Hyderabad, 2026.*t
